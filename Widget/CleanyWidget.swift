@@ -78,9 +78,7 @@ struct CleanyWidgetView: View {
                 StaleWidget()
             }
         }
-        .containerBackground(for: .widget) {
-            LinearGradient(colors: [Creek.water, Creek.deepWater], startPoint: .top, endPoint: .bottom)
-        }
+        .containerBackground(for: .widget) { Creek.ground }
     }
 }
 
@@ -91,22 +89,17 @@ struct SmallWidget: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top) {
-                Raccoon(mood: Creek.raccoon(snapshot.mood), size: 40)
-                Spacer(minLength: 0)
-                Text(detail(snapshot))
-                    .font(.system(.title3, design: .rounded).weight(.semibold))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-            }
             Text(Creek.title(snapshot.mood))
                 .font(.headline)
-                .foregroundStyle(snapshot.mood == .drainingFast ? Creek.lantern : .primary)
+            Text(detail(snapshot))
+                .font(.title2.weight(.semibold))
+                .monospacedDigit()
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
             CreekBand(snapshot: snapshot, height: 8)
             Spacer(minLength: 0)
             if snapshot.idleCount > 0 { CleanButton(count: snapshot.idleCount) }
-            else { Text(snapshot.mood == .allGood ? "The water's clear." : "Everything is in use.").font(.caption).foregroundStyle(.secondary) }
+            else { Text(snapshot.mood == .allGood ? "Nothing idle is running." : "Everything is in use.").font(.caption).foregroundStyle(.secondary) }
         }
     }
 }
@@ -125,10 +118,8 @@ struct MediumWidget: View {
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Raccoon(mood: Creek.raccoon(snapshot.mood), size: 44)
                 Text(Creek.title(snapshot.mood))
                     .font(.headline)
-                    .foregroundStyle(snapshot.mood == .drainingFast ? Creek.lantern : .primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(detail(snapshot)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
@@ -137,21 +128,22 @@ struct MediumWidget: View {
             }
             .frame(width: 112, alignment: .leading)
             VStack(alignment: .leading, spacing: 7) {
-                CoresLabel(cores: snapshot.coresBusy, size: 18)
-                CreekBand(snapshot: snapshot, height: 10)
+                CoresLabel(cores: snapshot.coresBusy, size: 20)
+                CreekBand(snapshot: snapshot, height: 8)
                 if top.isEmpty {
                     Text("Nothing is using the CPU").font(.caption).foregroundStyle(.secondary)
                 } else {
                     ForEach(top, id: \.id) { category in
                         HStack(spacing: 8) {
-                            Stone(symbol: Creek.symbol(category.id), color: Creek.color(category.id), size: 20)
                             Text(Creek.name(category.id)).font(.callout.weight(.medium)).lineLimit(1)
                             Spacer(minLength: 4)
-                            Text(Creek.cores(category.cores))
-                                .font(.system(.callout, design: .rounded))
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
+                            let idle = Creek.idleCores(category)
+                            if idle >= 0.05 {
+                                Text("\(Creek.cores(idle)) idle").font(.caption).foregroundStyle(Creek.idle)
+                            }
+                            Text(Creek.cores(category.cores)).font(.callout)
                         }
+                        .monospacedDigit()
                     }
                 }
                 Spacer(minLength: 0)
@@ -165,7 +157,7 @@ struct MediumWidget: View {
 struct StaleWidget: View {
     var body: some View {
         VStack(spacing: 6) {
-            Raccoon(mood: .watching, size: 44)
+            CleanyMark(size: 32, segment: false)
             Text("Open Cleany").font(.headline)
             Text("Numbers are out of date").font(.caption).foregroundStyle(.secondary)
         }
@@ -188,10 +180,10 @@ private struct CleanButton: View {
         Button(intent: CleanUpIdleIntent()) {
             Text("Clean up \(count)")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color(nsColor: .textBackgroundColor))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
-                .background(Creek.action, in: Capsule())
+                .background(Color.primary, in: Capsule())
         }
         .buttonStyle(.plain)
     }

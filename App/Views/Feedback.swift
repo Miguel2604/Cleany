@@ -1,45 +1,45 @@
 import CleanyCore
 import SwiftUI
 
-/// The top of the popover and the window: the raccoon, the mood, one sentence, then the creek band
-/// with the value it measures. Cause first, text second.
+/// The top of the popover and the window: the mood with the one finding, then the cores busy over
+/// the creek band and its legend. Cause first, text second.
 struct CreekHeader: View {
     @Environment(AppModel.self) private var model
-    var raccoonSize: CGFloat = 52
-    var bandHeight: CGFloat = 14
+    var titleSize: CGFloat = 17
+    var figureSize: CGFloat = 26
 
     private var watching: Bool {
         model.quickSelection.count == 0 && model.snapshot.watchingUntil(now: Date()) != nil
     }
 
+    /// The finding: what is idle and what it costs, or why nothing is.
     private var sentence: String {
         guard model.hasScanned else { return "Looking around…" }
         let idle = model.quickSelection.count
-        if idle > 0 { return idle == 1 ? "1 idle thing is clouding the water." : "\(idle) idle things are clouding the water." }
+        if idle > 0 {
+            let cores = Creek.cores(model.quickSelection.freedCores(in: model.snapshot))
+            return idle == 1 ? "1 idle thing is using \(cores) cores." : "\(idle) idle things are using \(cores) cores."
+        }
         if watching, let until = model.snapshot.watchingUntil(now: Date()), let hint = WatchingHint.text(until: until, now: Date()) {
             return hint
         }
-        return model.snapshot.mood == .allGood ? "The water's clear." : "Busy, but everything is in use."
+        return model.snapshot.mood == .allGood ? "Nothing idle is running." : "Busy, and everything is in use."
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                LiveRaccoon(mood: Creek.raccoon(model.snapshot.mood, watching: watching), size: raccoonSize)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.hasScanned ? Creek.title(model.snapshot.mood) : "Cleany")
-                        .font(raccoonSize > 60 ? .title2.weight(.semibold) : .title3.weight(.semibold))
-                        .foregroundStyle(model.snapshot.mood == .drainingFast ? Creek.lantern : .primary)
-                    Text(sentence)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(model.hasScanned ? Creek.title(model.snapshot.mood) : "Cleany")
+                    .font(.system(size: titleSize, weight: .semibold))
+                Text(sentence)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            VStack(alignment: .leading, spacing: 6) {
+            .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
-                    CoresLabel(cores: model.snapshot.coresBusy, size: raccoonSize > 60 ? 24 : 20)
+                    CoresLabel(cores: model.snapshot.coresBusy, size: figureSize)
                     Spacer(minLength: 8)
                     if model.hasScanned {
                         Text(Creek.batteryLine(model.snapshot))
@@ -48,34 +48,8 @@ struct CreekHeader: View {
                             .monospacedDigit()
                     }
                 }
-                CreekBand(snapshot: model.snapshot, height: bandHeight, washes: model.washes)
-            }
-        }
-    }
-}
-
-/// The raccoon, washing its paws for a few seconds after each cleanup.
-struct LiveRaccoon: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let mood: RaccoonMood
-    let size: CGFloat
-    @State private var washingUntil: Date?
-
-    var body: some View {
-        TimelineView(.animation(paused: washingUntil == nil || reduceMotion)) { context in
-            let washing = washingUntil.map { context.date < $0 } ?? false
-            Raccoon(
-                mood: washing ? .washing : mood, size: size,
-                pawPhase: context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.7) / 0.7
-            )
-        }
-        .onChange(of: model.washes) {
-            let until = Date().addingTimeInterval(3.5)
-            washingUntil = until
-            Task {
-                try? await Task.sleep(for: .seconds(3.6))
-                if washingUntil == until { washingUntil = nil }
+                CreekBand(snapshot: model.snapshot)
+                if model.hasScanned { BandLegend(snapshot: model.snapshot) }
             }
         }
     }
@@ -102,20 +76,20 @@ struct ToastView: View {
 }
 
 /// What the last Clean up did: "Stopped 3 · freed 1.2 cores", each item stopped or the reason it
-/// still runs, and Undo.
+/// still runs, and Undo. One lightness step above the window.
 struct OutcomeCard: View {
     @Environment(AppModel.self) private var model
     let outcome: CleanupOutcome
     var maxRows = 6
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: outcome.allStopped ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(outcome.allStopped ? Creek.reed : Creek.lantern)
+                    .font(.title3)
+                    .foregroundStyle(outcome.allStopped ? Creek.idle : .secondary)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(outcome.title).font(.headline)
+                    Text(outcome.title).font(.body.weight(.semibold))
                     if let subtitle = outcome.subtitle {
                         Text(subtitle).font(.caption).foregroundStyle(.secondary)
                     }
@@ -128,9 +102,9 @@ struct OutcomeCard: View {
                 }
                 Button { model.dismissOutcome() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 10, weight: .semibold))
                         .frame(width: 24, height: 24)
-                        .contentShape(Circle())
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -138,18 +112,20 @@ struct OutcomeCard: View {
                 .accessibilityLabel("Dismiss")
             }
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(outcome.entries.prefix(maxRows)) { entry in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Stone(symbol: entry.symbol, color: Creek.color(entry.category), size: 20)
-                            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: entry.symbol)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18)
                         Text(entry.name).font(.callout).lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: 6)
                         switch entry.result {
                         case .stopped:
-                            Label("Stopped", systemImage: "checkmark")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Creek.reed)
+                            Text("Stopped")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(Creek.idle)
                                 .fixedSize()
                         case .notStopped(let reason):
                             Text(reason)
@@ -170,39 +146,54 @@ struct OutcomeCard: View {
                 }
             }
         }
-        .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Creek.raised))
     }
 }
 
-/// "Clean up 4 idle · frees 3.1 cores", or a disabled "Nothing ticked" / "Nothing idle".
+/// The one primary control, made primary by inversion: an ink pill with the window's color for its
+/// label. Pressing dims and settles it; disabled, it drops to a quiet fill.
+struct InkButtonStyle: ButtonStyle {
+    /// Replaces the ink for the one destructive case (Stop anyway); its label turns white.
+    var fill: Color?
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .foregroundStyle(isEnabled ? (fill == nil ? Color(nsColor: .textBackgroundColor) : .white) : .secondary)
+            .frame(maxWidth: .infinity, minHeight: 36)
+            .padding(.horizontal, 16)
+            .background(Capsule().fill(isEnabled ? (fill ?? .primary) : Creek.track))
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+            .contentShape(Capsule())
+    }
+}
+
+/// "Clean up 4 idle · frees 3.1 cores", or a quiet "Nothing ticked" / "Nothing idle".
 struct CleanUpButton: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(spacing: 6) {
-            let count = model.selection.count
-            Button {
-                Task { await model.cleanUp() }
-            } label: {
-                HStack(spacing: 4) {
-                    if model.isCleaning { ProgressView().controlSize(.small) }
-                    if count == 0 {
-                        Text(model.hasTickable ? "Nothing ticked" : "Nothing idle")
-                    } else {
-                        Text("Clean up \(count) idle")
-                        Text("· frees \(Creek.cores(model.freedCores)) cores").opacity(0.85)
-                    }
+        let count = model.selection.count
+        Button {
+            Task { await model.cleanUp() }
+        } label: {
+            HStack(spacing: 6) {
+                if model.isCleaning { ProgressView().controlSize(.small) }
+                if count == 0 {
+                    Text(model.hasTickable ? "Nothing ticked" : "Nothing idle")
+                } else {
+                    Text("Clean up \(count) idle")
+                    Text("frees \(Creek.cores(model.freedCores)) cores").fontWeight(.regular).opacity(0.7)
                 }
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
             }
-            .buttonStyle(.glassProminent)
-            .tint(Creek.action)
-            .controlSize(.large)
-            .keyboardShortcut(.defaultAction)
-            .disabled(count == 0 || model.isCleaning || model.cleanIdleInFlight)
+            .monospacedDigit()
         }
+        .buttonStyle(InkButtonStyle())
+        .keyboardShortcut(.defaultAction)
+        .disabled(count == 0 || model.isCleaning || model.cleanIdleInFlight)
     }
 }

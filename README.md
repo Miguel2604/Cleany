@@ -3,8 +3,8 @@
 # Cleany
 
 **See what is draining your Mac's battery, and stop the idle culprits in one click.**
-A menu bar app, a window and a widget for macOS 26. A raccoon lives in your menu bar and shows
-how your Mac is doing. Cleany never touches anything that is in use.
+A menu bar app, a window and a widget for macOS 26. Its mark sits in your menu bar and splits off a
+small stretch when something idle can be cleaned up. Cleany never touches anything that is in use.
 
 Built for developers: forgotten iOS Simulators, Docker containers, dev servers, idle apps and
 runaway browser tabs are what usually eat the battery.
@@ -12,7 +12,8 @@ runaway browser tabs are what usually eat the battery.
 ## Features
 
 - **The creek band.** Each category gets a stretch of the strip as wide as its exact share of the
-  CPU in use. You see the cause before you read anything.
+  CPU in use, and the idle part of each stretch is green. You see the cause, and what you can get
+  back, before you read anything.
 - **Quick select** ticks everything idle. **Choose myself** leaves the ticks to you.
 - **Every item explains itself.** The **?** says what it is, why Cleany thinks it is idle or in use,
   and what you lose by stopping it.
@@ -37,7 +38,8 @@ swift test --package-path Packages/CleanyCore           # the detection engine's
 ```
 
 The widget and the app share snapshots through the App Group `$(DEVELOPMENT_TEAM).app.cleany`, so
-the widget needs a real team. The app icon is drawn in code: `Scripts/render-icon.sh` renders it.
+the widget needs a real team. The app icon is an Icon Composer file (`App/AppIcon.icon`, layered SVGs
+that macOS renders in Liquid Glass); `Scripts/render-icon.sh` exports `docs/icon.png` from it.
 
 Debug builds take `-debugDemo YES` (a made-up busy Mac, cleanups are dry runs), `-dryRunCleanup YES`,
 `-debugOpen main|popover` and `-debugAppearance dark|light`.

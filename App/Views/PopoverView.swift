@@ -20,8 +20,9 @@ struct PopoverView: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             CreekHeader()
+                .padding(.horizontal, 4)
             list
             if let outcome = model.outcome {
                 OutcomeCard(outcome: outcome, maxRows: 4)
@@ -39,7 +40,6 @@ struct PopoverView: View {
         .animation(.snappy, value: model.outcome?.id)
         .padding(16)
         .frame(width: 360)
-        .background(Creek.depth.ignoresSafeArea())
     }
 
     @ViewBuilder
@@ -52,28 +52,26 @@ struct PopoverView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 60)
         } else {
-            GlassEffectContainer(spacing: 6) {
-                VStack(spacing: 6) {
-                    ForEach(top, id: \.id) { category in
-                        CategoryRow(
-                            category: category,
-                            isOpen: Binding(get: { opened == category.id }, set: { opened = $0 ? category.id : nil }),
-                            maxItems: 5,
-                            onMore: { actions.openWindow(nil) },
-                            onExplain: { actions.openWindow($0) }
-                        )
-                    }
+            VStack(spacing: 2) {
+                ForEach(top, id: \.id) { category in
+                    CategoryRow(
+                        category: category,
+                        isOpen: Binding(get: { opened == category.id }, set: { opened = $0 ? category.id : nil }),
+                        maxItems: 5,
+                        onMore: { actions.openWindow(nil) },
+                        onExplain: { actions.openWindow($0) }
+                    )
                 }
             }
+            .padding(.horizontal, -6)
         }
     }
 
     private var footer: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Button { actions.openWindow(nil) } label: {
                 Text("Open Cleany")
-                    .font(.callout)
-                    .foregroundStyle(Creek.reed)
+                    .font(.callout.weight(.medium))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -91,14 +89,28 @@ struct PopoverView: View {
     }
 
     private func iconButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        PlainIconButton(symbol: symbol, label: label, action: action)
+    }
+}
+
+/// A bare 13 pt symbol with a 28 pt target; a lightness step under the pointer is its only chrome.
+struct PlainIconButton: View {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 13))
+                .foregroundStyle(hovering ? .primary : .secondary)
                 .frame(width: 28, height: 28)
+                .background(Circle().fill(hovering ? Creek.raised : .clear))
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .glassEffect(.regular.interactive(), in: .circle)
+        .onHover { hovering = $0 }
         .help(label)
         .accessibilityLabel(label)
     }

@@ -16,7 +16,6 @@ struct ExplainSheet: View {
     /// The latest version of the item, so the verdict stays current while the sheet is open.
     private var item: Item { model.snapshot.item(withID: original.id) ?? original }
     private var verdict: Verdict { item.judgement.verdict }
-    private var color: Color { Creek.color(item.category) }
 
     private var signalsTitle: String {
         switch verdict {
@@ -28,8 +27,8 @@ struct ExplainSheet: View {
 
     private var safety: (text: String, color: Color) {
         switch verdict {
-        case .idle: ("Safe", Creek.reed)
-        case .inUse: ("Probably being used", Creek.lantern)
+        case .idle: ("Safe", Creek.idle)
+        case .inUse: ("Probably being used", Color.primary)
         case .manual, .check, .advice: ("Your call", Color.secondary)
         }
     }
@@ -37,9 +36,9 @@ struct ExplainSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
-                Stone(symbol: item.symbol, color: color, size: 42)
+                ItemMedia(item: item, size: 32)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.name).font(.title3.bold()).lineLimit(2)
+                    Text(item.name).font(.title3.weight(.semibold)).lineLimit(2)
                     Text("\(Creek.name(item.category)) · \(item.judgement.fact)")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -73,11 +72,11 @@ struct ExplainSheet: View {
             section("Safe to stop?") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(safety.text)
-                        .font(.callout.weight(.semibold))
+                        .font(.callout.weight(.medium))
                         .foregroundStyle(safety.color)
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(safety.color.opacity(0.16)))
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(safety.color.opacity(0.14)))
                     if let explanation {
                         Text(explanation.whatYouLose)
                             .foregroundStyle(.secondary)
@@ -102,7 +101,6 @@ struct ExplainSheet: View {
         }
         .padding(20)
         .frame(width: 380)
-        .background(Creek.water.opacity(0.35))
         .task(id: original.id) {
             explanation = await model.explain(original)
         }
@@ -123,13 +121,13 @@ struct ExplainSheet: View {
                 } label: {
                     Text("Restart…").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(InkButtonStyle())
             case .check:
                 // Cleany can't tell which tab it is; the browser's own task manager can close it.
                 Button { dismiss() } label: {
                     Text("OK").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(InkButtonStyle())
             case .inUse where item.isEngine:
                 // Quitting an engine stops everything in it, so it is never forced: no "Stop anyway".
                 VStack(alignment: .trailing, spacing: 8) {
@@ -162,13 +160,11 @@ struct ExplainSheet: View {
                 } label: {
                     Text(verdict == .inUse ? "Stop anyway" : "Stop").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glassProminent)
-                .tint(verdict == .inUse ? Creek.coral : Creek.action)
+                .buttonStyle(InkButtonStyle(fill: verdict == .inUse ? Creek.negativeFill : nil))
                 .disabled(model.isCleaning || model.cleanIdleInFlight)
             }
         }
         .controlSize(.large)
-        .tint(Creek.action)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
@@ -183,8 +179,8 @@ struct ExplainSheet: View {
 
     private func signalColor(_ kind: Signal.Kind) -> Color {
         switch kind {
-        case .idle: Creek.reed
-        case .inUse: Creek.color(.containers)
+        case .idle: Creek.idleMark
+        case .inUse: Color.primary
         case .neutral: Color.secondary
         }
     }

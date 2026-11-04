@@ -44,7 +44,7 @@ targets:
     sources:
       - Widget
       - App/Views/Creek.swift
-      - App/Views/Raccoon.swift
+      - App/Views/Mark.swift
     dependencies:
       - package: CleanyCore
     settings:

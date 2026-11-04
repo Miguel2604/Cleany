@@ -38,7 +38,8 @@ Lives in the menu bar (glance + popover that does the whole job), a main window 
 ## Brand Commitments
 
 - Name: Cleany.
-- Mascot: a raccoon, known for "washing" its food with its paws. Appears as the app icon, in the menu bar, and in-app, reacting to the Mac's state.
+- Mark: the creek band bent into a C, open on the right, with its last stretch split off in green (what can come back). App icon (`App/AppIcon.icon`), menu bar (the stretch shows only while something idle can be cleaned up), Settings and the widget. No mascot.
+- Colour: ink and two greys, one green on data (idle, what comes back), red only on Stop anyway.
 - Liquid Glass (macOS 26 design language) is a binding user requirement.
 
 ## Evidence on Hand
@@ -51,4 +52,4 @@ No users, testimonials, benchmarks or press yet. Do not invent any.
 2. Show the cause first, text second.
 3. Every verdict explains itself.
 4. Warn, never act alone.
-5. Friendly, never alarming: the raccoon helps, it doesn't scold.
+5. Calm, never alarming: it helps, it doesn't scold.

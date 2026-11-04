@@ -2,36 +2,27 @@ import AppKit
 import CleanyCore
 import SwiftUI
 
-/// The night-creek palette, category names and symbols, formatters, and the creek band. Depends only
-/// on CleanyCore and SwiftUI so the widget draws the same world.
+/// The palette, category names and symbols, formatters, and the creek band. Depends only on
+/// CleanyCore and SwiftUI so the widget draws the same world.
+///
+/// One hue, on data only: the green of a charging battery marks what is idle and can come back.
+/// Everything else is ink and two greys. Red appears once, on Stop anyway.
 enum Creek {
-    /// The water: deep blue-green at night, pale creek at dawn. Tints the window's glass.
-    static let water = Color(light: 0xD5E8E2, dark: 0x0B2226)
-    static let deepWater = Color(light: 0xBCD8D0, dark: 0x061719)
-    /// The one action tint (Clean up, Stop). Dark enough for white labels in both appearances.
-    static let action = Color(hex: 0x2E7A4E)
-    /// "idle", "Safe", "Stopped": reed green, readable as text on the water.
-    static let reed = Color(light: 0x25693F, dark: 0x8BD69F)
-    /// Draining fast and "check".
-    static let lantern = Color(light: 0x8F5200, dark: 0xF3B249)
-    /// Stop anyway, and nothing else.
-    static let coral = Color(light: 0xB8392A, dark: 0xF07A65)
-    /// The water under the glass: lighter at the surface, deeper below.
-    static let depth = LinearGradient(colors: [water.opacity(0.55), deepWater.opacity(0.85)], startPoint: .top, endPoint: .bottom)
-    /// The band's empty water and empty ticks.
-    static let track = Color.primary.opacity(0.10)
-
-    static func color(_ id: CategoryID) -> Color {
-        switch id {
-        case .simulators: Color(light: 0x95641A, dark: 0xE9B872)
-        case .containers: Color(light: 0x2D66A3, dark: 0x82B4E8)
-        case .devServers: Color(light: 0x6A4EC0, dark: 0xB8A4F2)
-        case .apps: Color(light: 0xA3446A, dark: 0xEBA3BA)
-        case .browserTabs: Color(light: 0x1F7385, dark: 0x8ED5E5)
-        case .restart: Color(light: 0x56625F, dark: 0x93A19E)
-        case .worktrees: Color(light: 0x4A5DBE, dark: 0xA2B5FF)
-        }
-    }
+    /// The one data hue, as text: "idle", "2.1 cores idle", "Stopped". 4.5:1 on the window in both appearances.
+    static let idle = Color(light: 0x1C7A47, dark: 0x5CD692)
+    /// The same hue as a mark: the band's idle stretches and the legend dot.
+    static let idleMark = Color(light: 0x2DB46E, dark: 0x4CC983)
+    /// The band's in-use stretches.
+    static let inUseMark = Color.primary.opacity(0.38)
+    /// Stop anyway, and nothing else: as text, and as the button's fill under a white label (5.6:1).
+    static let negative = Color(light: 0xB8392A, dark: 0xF07A65)
+    static let negativeFill = Color(hex: 0xC4242A)
+    /// The band's empty stretch, unticked boxes, quiet fills.
+    static let track = Color.primary.opacity(0.08)
+    /// One lightness step above the window: an opened category, the outcome, hover.
+    static let raised = Color.primary.opacity(0.05)
+    /// The ground under the glass, tinting the window and filling the widget. True neutral, no navy.
+    static let ground = Color(light: 0xF6F6F7, dark: 0x0E0F11)
 
     static func name(_ id: CategoryID) -> String {
         switch id {
@@ -48,9 +39,9 @@ enum Creek {
     static func symbol(_ id: CategoryID) -> String {
         switch id {
         case .simulators: "iphone"
-        case .containers: "shippingbox.fill"
+        case .containers: "shippingbox"
         case .devServers: "server.rack"
-        case .apps: "square.grid.2x2.fill"
+        case .apps: "square.grid.2x2"
         case .browserTabs: "globe"
         case .restart: "arrow.clockwise"
         case .worktrees: "arrow.triangle.branch"
@@ -62,14 +53,6 @@ enum Creek {
         case .allGood: "All calm"
         case .busy: "Busy"
         case .drainingFast: "Draining fast"
-        }
-    }
-
-    static func raccoon(_ mood: Mood, watching: Bool = false) -> RaccoonMood {
-        switch mood {
-        case .allGood: .calm
-        case .busy: watching ? .watching : .busy
-        case .drainingFast: .worried
         }
     }
 
@@ -91,13 +74,19 @@ enum Creek {
         return rest == 0 ? "\(value / 60)h" : "\(value / 60)h \(rest)m"
     }
 
+    /// The cores a category's idle items use: the part of its stretch that could come back.
+    static func idleCores(_ category: CategorySummary) -> Double {
+        category.items.filter { $0.judgement.verdict == .idle }.reduce(0) { $0 + $1.cores }
+    }
+
     /// The band's categories in a fixed order (the order never changes, only the widths), with their
-    /// exact share of the CPU in use. The floor of one core keeps a calm Mac mostly open water.
-    static func shares(_ snapshot: Snapshot) -> [(id: CategoryID, share: Double)] {
+    /// exact share of the CPU in use and the idle part of it. The floor of one core keeps a calm Mac
+    /// mostly empty track.
+    static func shares(_ snapshot: Snapshot) -> [(id: CategoryID, share: Double, idleShare: Double)] {
         let shown = snapshot.categories.filter { $0.id != .restart && $0.cores > 0 }
         let total = max(snapshot.coresBusy, shown.reduce(0) { $0 + $1.cores }, 1)
         return CategoryID.allCases.compactMap { id in
-            shown.first { $0.id == id }.map { (id, $0.cores / total) }
+            shown.first { $0.id == id }.map { (id, $0.cores / total, min(idleCores($0), $0.cores) / total) }
         }
     }
 }
@@ -115,59 +104,74 @@ extension Color {
     }
 }
 
-/// The creek: one strip of water where each category's stretch is exactly its share of the CPU in
-/// use, in a fixed order. `washes` changing sends a ripple across it.
+/// The creek: one strip where each category's stretch is exactly its share of the CPU in use, in a
+/// fixed order, split by 2 pt of water. The idle part of each stretch is green; the rest is in use.
 struct CreekBand: View {
     let snapshot: Snapshot
-    var height: CGFloat = 14
-    var washes = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var ripple: CGFloat = -1
+    var height: CGFloat = 10
 
     var body: some View {
         GeometryReader { geo in
             let shares = Creek.shares(snapshot)
             let gaps = CGFloat(max(shares.count - 1, 0)) * 2
+            let width = max(geo.size.width - gaps, 0)
             HStack(spacing: 2) {
                 ForEach(shares, id: \.id) { entry in
-                    Rectangle()
-                        .fill(Creek.color(entry.id))
-                        .frame(width: max(2, (geo.size.width - gaps) * entry.share))
+                    HStack(spacing: 0) {
+                        Rectangle().fill(Creek.idleMark).frame(width: width * entry.idleShare)
+                        Rectangle().fill(Creek.inUseMark)
+                    }
+                    .frame(width: max(2, width * entry.share))
+                    .help("\(Creek.name(entry.id)): \(Int((entry.share * 100).rounded()))% of the CPU in use")
                 }
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Creek.track)
-            .overlay {
-                // The ripple: a bright crest crossing the water after a cleanup.
-                LinearGradient(colors: [.clear, .white.opacity(0.55), .clear], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: geo.size.width * 0.35)
-                    .offset(x: ripple * geo.size.width)
-                    .opacity(ripple > -1 && ripple < 1 ? 1 : 0)
-            }
-            .clipShape(.rect(cornerRadius: height / 2.5, style: .continuous))
+            .clipShape(.capsule)
         }
         .frame(height: height)
         .animation(.smooth(duration: 0.6), value: snapshot)
-        .onChange(of: washes) {
-            guard !reduceMotion else { return }
-            ripple = -0.35
-            withAnimation(.easeOut(duration: 1.1)) { ripple = 1 }
-        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Creek.shares(snapshot).map { "\(Creek.name($0.id)) \(Int(($0.share * 100).rounded())) percent" }.joined(separator: ", "))
     }
 }
 
-/// "10.5 cores busy": the value the band measures, said once, with rounded numerals.
-struct CoresLabel: View {
-    let cores: Double
-    var size: CGFloat = 20
+/// The band's legend: each dot is the mark it explains, with the cores it stands for.
+struct BandLegend: View {
+    let snapshot: Snapshot
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
+        // The same parts the band draws, so the legend's figures add up to its stretches.
+        let shown = snapshot.categories.filter { $0.id != .restart && $0.cores > 0 }
+        let idle = shown.reduce(0) { $0 + min(Creek.idleCores($1), $1.cores) }
+        let inUse = shown.reduce(0) { $0 + $1.cores } - idle
+        HStack(spacing: 14) {
+            entry(Creek.idleMark, value: idle, label: "idle", ink: Creek.idle)
+            entry(Creek.inUseMark, value: max(inUse, 0), label: "in use", ink: .secondary)
+        }
+        .font(.caption)
+        .monospacedDigit()
+    }
+
+    private func entry(_ mark: Color, value: Double, label: String, ink: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(mark).frame(width: 6, height: 6)
+            Text("\(Creek.cores(value)) \(label)").foregroundStyle(ink)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// "10.5 cores busy": the value the band measures, said once, in tabular figures.
+struct CoresLabel: View {
+    let cores: Double
+    var size: CGFloat = 24
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
             Text(Creek.cores(cores))
-                .font(.system(size: size, weight: .semibold, design: .rounded))
+                .font(.system(size: size, weight: .semibold))
                 .monospacedDigit()
                 .contentTransition(.numericText())
             Text("cores busy")
@@ -175,23 +179,5 @@ struct CoresLabel: View {
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// A category's SF Symbol on a small tinted stone; its color matches its stretch of the band.
-struct Stone: View {
-    let symbol: String
-    let color: Color
-    var size: CGFloat = 26
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-            .fill(color.opacity(0.22))
-            .frame(width: size, height: size)
-            .overlay {
-                Image(systemName: symbol)
-                    .font(.system(size: size * 0.48, weight: .semibold))
-                    .foregroundStyle(color)
-            }
     }
 }

@@ -17,7 +17,7 @@ struct SettingsView: View {
             Section {
                 Toggle("Open at login", isOn: loginBinding)
                 if let loginError {
-                    Text(loginError).font(.caption).foregroundStyle(Creek.coral)
+                    Text(loginError).font(.caption).foregroundStyle(Creek.negative)
                 }
                 Toggle("Use Apple Intelligence for explanations", isOn: $model.useAI)
                 LabeledContent("Open the menu from anywhere", value: "⌃⌥⌘C")
@@ -76,7 +76,7 @@ struct SettingsView: View {
 
             Section {
                 HStack(spacing: 12) {
-                    Raccoon(mood: .calm, size: 40)
+                    CleanyMark(size: 32)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Cleany").font(.headline)
                         Text("Its detection engine comes from CleanUp by TheoInTech (MIT).")

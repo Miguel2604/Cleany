@@ -92,8 +92,6 @@ final class AppModel {
     @ObservationIgnored private var lastWidgetReload: Date?
     /// Past cleanups, newest first (Settings shows them).
     private(set) var history = CleanupHistory(defaults: .standard)
-    /// Bumped after every cleanup that stopped something: the creek band ripples and the raccoon washes.
-    private(set) var washes = 0
     /// Opens the main window; the app delegate owns the windows and sets this at launch.
     @ObservationIgnored var openMainWindow: () -> Void = {}
 
@@ -294,7 +292,6 @@ final class AppModel {
             date: Date(), stopped: stopped.count, freedCores: report.freedCores,
             names: items.filter { stopped.contains($0.id) }.map(\.name)
         ))
-        if !stopped.isEmpty { washes += 1 }
 
         dismissToast()
         show(CleanupOutcome(items: items, report: report))

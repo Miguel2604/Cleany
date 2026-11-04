@@ -11,8 +11,8 @@ struct MainView: View {
         @Bindable var model = model
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: 16) {
-                    CreekHeader(raccoonSize: 72, bandHeight: 22)
+                VStack(spacing: 20) {
+                    CreekHeader(titleSize: 22, figureSize: 30)
                     Picker("Selection", selection: $model.mode) {
                         Text("Quick select").tag(AppModel.Mode.quick)
                         Text("Choose myself").tag(AppModel.Mode.manual)
@@ -42,22 +42,12 @@ struct MainView: View {
                 .padding(.bottom, 20)
         }
         .animation(.snappy, value: model.outcome?.id)
-        .background(Creek.depth.ignoresSafeArea())
         .frame(width: 440)
         .frame(minHeight: 520, maxHeight: .infinity)
         .overlay(alignment: .topTrailing) {
-            Button(action: actions.openSettings) {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .glassEffect(.regular.interactive(), in: .circle)
-            .padding(.trailing, 14)
-            .padding(.top, 8)
-            .help("Settings")
-            .accessibilityLabel("Settings")
+            PlainIconButton(symbol: "gearshape", label: "Settings", action: actions.openSettings)
+                .padding(.trailing, 12)
+                .padding(.top, 6)
         }
         .overlay(alignment: .bottom) {
             if let toast = model.toast {
@@ -83,20 +73,19 @@ struct MainView: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 24)
         } else {
-            GlassEffectContainer(spacing: 8) {
-                VStack(spacing: 8) {
-                    ForEach(model.snapshot.categories, id: \.id) { category in
-                        CategoryRow(
-                            category: category,
-                            isOpen: Binding(
-                                get: { model.expanded.contains(category.id) },
-                                set: { open in if open { model.expanded.insert(category.id) } else { model.expanded.remove(category.id) } }
-                            ),
-                            onExplain: { model.explaining = $0 }
-                        )
-                    }
+            VStack(spacing: 4) {
+                ForEach(model.snapshot.categories, id: \.id) { category in
+                    CategoryRow(
+                        category: category,
+                        isOpen: Binding(
+                            get: { model.expanded.contains(category.id) },
+                            set: { open in if open { model.expanded.insert(category.id) } else { model.expanded.remove(category.id) } }
+                        ),
+                        onExplain: { model.explaining = $0 }
+                    )
                 }
             }
+            .padding(.horizontal, -10)
         }
     }
 }
