@@ -96,7 +96,7 @@ struct SmallWidget: View {
                 .monospacedDigit()
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
-            CreekBand(snapshot: snapshot, height: 8)
+            CreekBand(snapshot: snapshot, reclaimable: snapshot.reclaimable, height: 8)
             Spacer(minLength: 0)
             if snapshot.idleCount > 0 { CleanButton(count: snapshot.idleCount) }
             else { Text(snapshot.mood == .allGood ? "Nothing idle is running." : "Everything is in use.").font(.caption).foregroundStyle(.secondary) }
@@ -129,7 +129,7 @@ struct MediumWidget: View {
             .frame(width: 112, alignment: .leading)
             VStack(alignment: .leading, spacing: 7) {
                 CoresLabel(cores: snapshot.coresBusy, size: 20)
-                CreekBand(snapshot: snapshot, height: 8)
+                CreekBand(snapshot: snapshot, reclaimable: snapshot.reclaimable, height: 8)
                 if top.isEmpty {
                     Text("Nothing is using the CPU").font(.caption).foregroundStyle(.secondary)
                 } else {
@@ -137,7 +137,7 @@ struct MediumWidget: View {
                         HStack(spacing: 8) {
                             Text(Creek.name(category.id)).font(.callout.weight(.medium)).lineLimit(1)
                             Spacer(minLength: 4)
-                            let idle = Creek.idleCores(category)
+                            let idle = Creek.idleCores(category, reclaimable: snapshot.reclaimable)
                             if idle >= 0.05 {
                                 Text("\(Creek.cores(idle)) idle").font(.caption).foregroundStyle(Creek.idle)
                             }
@@ -216,17 +216,19 @@ extension Snapshot {
 
     /// The widget gallery: the day this app was written for. Illustrative numbers.
     static func widgetBusySample(date: Date = .now) -> Snapshot {
-        Snapshot(
+        let categories = [
+            CategorySummary(id: .simulators, items: [sampleItem(.simulators, "Simulators", cores: 5.4)]),
+            CategorySummary(id: .containers, items: [sampleItem(.containers, "Containers", cores: 1.9)]),
+            CategorySummary(id: .devServers, items: [sampleItem(.devServers, "Dev servers", cores: 1.6)]),
+        ]
+        let items = categories.flatMap(\.items)
+        return Snapshot(
             date: date,
             battery: BatteryReading(onBattery: true, percent: 64, drainWatts: 38, minutesLeft: 35, healthPercent: 93, cycleCount: 221),
             coresBusy: 10.5, swapUsedBytes: 0, swapTotalBytes: 0, uptime: 3_600,
-            categories: [
-                CategorySummary(id: .simulators, items: [sampleItem(.simulators, "Simulators", cores: 5.4)]),
-                CategorySummary(id: .containers, items: [sampleItem(.containers, "Containers", cores: 1.9)]),
-                CategorySummary(id: .devServers, items: [sampleItem(.devServers, "Dev servers", cores: 1.6)]),
-            ],
+            categories: categories,
             mood: .drainingFast,
-            idleCount: 11, freedCores: 8.0
+            idleCount: 11, freedCores: items.reduce(0) { $0 + $1.cores }, reclaimable: Set(items.map(\.id))
         )
     }
 }

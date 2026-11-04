@@ -48,8 +48,9 @@ struct CreekHeader: View {
                             .monospacedDigit()
                     }
                 }
-                CreekBand(snapshot: model.snapshot)
-                if model.hasScanned { BandLegend(snapshot: model.snapshot) }
+                let reclaimable = model.quickSelection.ticked
+                CreekBand(snapshot: model.snapshot, reclaimable: reclaimable)
+                if model.hasScanned { BandLegend(snapshot: model.snapshot, reclaimable: reclaimable) }
             }
         }
     }
@@ -99,6 +100,7 @@ struct OutcomeCard: View {
                     Button("Undo") { Task { await model.undoLast() } }
                         .buttonStyle(.glass)
                         .controlSize(.small)
+                        .disabled(model.isCleaning || model.cleanIdleInFlight)
                 }
                 Button { model.dismissOutcome() } label: {
                     Image(systemName: "xmark")
@@ -186,7 +188,9 @@ struct CleanUpButton: View {
                 if count == 0 {
                     Text(model.hasTickable ? "Nothing ticked" : "Nothing idle")
                 } else {
-                    Text("Clean up \(count) idle")
+                    // "idle" only when it is true of every ticked item: Choose myself can tick apps
+                    // the engine never calls idle.
+                    Text(model.selectionIsAllIdle ? "Clean up \(count) idle" : "Clean up \(count)")
                     Text("frees \(Creek.cores(model.freedCores)) cores").fontWeight(.regular).opacity(0.7)
                 }
             }

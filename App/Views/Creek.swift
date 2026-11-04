@@ -74,19 +74,20 @@ enum Creek {
         return rest == 0 ? "\(value / 60)h" : "\(value / 60)h \(rest)m"
     }
 
-    /// The cores a category's idle items use: the part of its stretch that could come back.
-    static func idleCores(_ category: CategorySummary) -> Double {
-        category.items.filter { $0.judgement.verdict == .idle }.reduce(0) { $0 + $1.cores }
+    /// The cores of a category's items that Quick select would stop (`reclaimable`): the part of its
+    /// stretch that could come back. Kept items and blocked engines are not in it.
+    static func idleCores(_ category: CategorySummary, reclaimable: Set<ItemIdentity>) -> Double {
+        category.items.filter { reclaimable.contains($0.id) }.reduce(0) { $0 + $1.cores }
     }
 
     /// The band's categories in a fixed order (the order never changes, only the widths), with their
     /// exact share of the CPU in use and the idle part of it. The floor of one core keeps a calm Mac
     /// mostly empty track.
-    static func shares(_ snapshot: Snapshot) -> [(id: CategoryID, share: Double, idleShare: Double)] {
+    static func shares(_ snapshot: Snapshot, reclaimable: Set<ItemIdentity>) -> [(id: CategoryID, share: Double, idleShare: Double)] {
         let shown = snapshot.categories.filter { $0.id != .restart && $0.cores > 0 }
         let total = max(snapshot.coresBusy, shown.reduce(0) { $0 + $1.cores }, 1)
         return CategoryID.allCases.compactMap { id in
-            shown.first { $0.id == id }.map { (id, $0.cores / total, min(idleCores($0), $0.cores) / total) }
+            shown.first { $0.id == id }.map { (id, $0.cores / total, min(idleCores($0, reclaimable: reclaimable), $0.cores) / total) }
         }
     }
 }
@@ -108,11 +109,13 @@ extension Color {
 /// fixed order, split by 2 pt of water. The idle part of each stretch is green; the rest is in use.
 struct CreekBand: View {
     let snapshot: Snapshot
+    /// What Quick select would stop: the app's quick selection, or the widget snapshot's copy of it.
+    let reclaimable: Set<ItemIdentity>
     var height: CGFloat = 10
 
     var body: some View {
         GeometryReader { geo in
-            let shares = Creek.shares(snapshot)
+            let shares = Creek.shares(snapshot, reclaimable: reclaimable)
             let gaps = CGFloat(max(shares.count - 1, 0)) * 2
             let width = max(geo.size.width - gaps, 0)
             HStack(spacing: 2) {
@@ -133,18 +136,19 @@ struct CreekBand: View {
         .frame(height: height)
         .animation(.smooth(duration: 0.6), value: snapshot)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Creek.shares(snapshot).map { "\(Creek.name($0.id)) \(Int(($0.share * 100).rounded())) percent" }.joined(separator: ", "))
+        .accessibilityLabel(Creek.shares(snapshot, reclaimable: reclaimable).map { "\(Creek.name($0.id)) \(Int(($0.share * 100).rounded())) percent" }.joined(separator: ", "))
     }
 }
 
 /// The band's legend: each dot is the mark it explains, with the cores it stands for.
 struct BandLegend: View {
     let snapshot: Snapshot
+    let reclaimable: Set<ItemIdentity>
 
     var body: some View {
         // The same parts the band draws, so the legend's figures add up to its stretches.
         let shown = snapshot.categories.filter { $0.id != .restart && $0.cores > 0 }
-        let idle = shown.reduce(0) { $0 + min(Creek.idleCores($1), $1.cores) }
+        let idle = shown.reduce(0) { $0 + min(Creek.idleCores($1, reclaimable: reclaimable), $1.cores) }
         let inUse = shown.reduce(0) { $0 + $1.cores } - idle
         HStack(spacing: 14) {
             entry(Creek.idleMark, value: idle, label: "idle", ink: Creek.idle)

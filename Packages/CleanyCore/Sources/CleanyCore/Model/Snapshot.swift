@@ -14,6 +14,9 @@ public struct Snapshot: Codable, Hashable, Sendable {
     /// without scanning. 0 in a fresh scan and in JSON written before these existed.
     public let idleCount: Int
     public let freedCores: Double
+    /// The items Quick select would stop, so the widget's band and figures agree with its button.
+    /// Empty in a fresh scan and in JSON written before it existed.
+    public let reclaimable: Set<ItemIdentity>
 
     public init(
         date: Date,
@@ -25,7 +28,8 @@ public struct Snapshot: Codable, Hashable, Sendable {
         categories: [CategorySummary],
         mood: Mood,
         idleCount: Int = 0,
-        freedCores: Double = 0
+        freedCores: Double = 0,
+        reclaimable: Set<ItemIdentity> = []
     ) {
         self.date = date
         self.battery = battery
@@ -37,14 +41,15 @@ public struct Snapshot: Codable, Hashable, Sendable {
         self.mood = mood
         self.idleCount = idleCount
         self.freedCores = freedCores
+        self.reclaimable = reclaimable
     }
 
     /// A copy carrying what Quick select would stop, for the widget.
-    public func withQuickSummary(idleCount: Int, freedCores: Double) -> Snapshot {
+    public func withQuickSummary(idleCount: Int, freedCores: Double, reclaimable: Set<ItemIdentity> = []) -> Snapshot {
         Snapshot(
             date: date, battery: battery, coresBusy: coresBusy, swapUsedBytes: swapUsedBytes,
             swapTotalBytes: swapTotalBytes, uptime: uptime, categories: categories, mood: mood,
-            idleCount: idleCount, freedCores: freedCores
+            idleCount: idleCount, freedCores: freedCores, reclaimable: reclaimable
         )
     }
 
@@ -63,7 +68,7 @@ public struct Snapshot: Codable, Hashable, Sendable {
         return Snapshot(
             date: date, battery: battery, coresBusy: coresBusy, swapUsedBytes: swapUsedBytes,
             swapTotalBytes: swapTotalBytes, uptime: uptime, categories: lean, mood: mood,
-            idleCount: idleCount, freedCores: freedCores
+            idleCount: idleCount, freedCores: freedCores, reclaimable: reclaimable
         )
     }
 
@@ -80,10 +85,11 @@ public struct Snapshot: Codable, Hashable, Sendable {
         mood = try c.decode(Mood.self, forKey: .mood)
         idleCount = try c.decodeIfPresent(Int.self, forKey: .idleCount) ?? 0
         freedCores = try c.decodeIfPresent(Double.self, forKey: .freedCores) ?? 0
+        reclaimable = try c.decodeIfPresent(Set<ItemIdentity>.self, forKey: .reclaimable) ?? []
     }
 
     private enum CodingKeys: String, CodingKey {
-        case date, battery, coresBusy, swapUsedBytes, swapTotalBytes, uptime, categories, mood, idleCount, freedCores
+        case date, battery, coresBusy, swapUsedBytes, swapTotalBytes, uptime, categories, mood, idleCount, freedCores, reclaimable
     }
 
     public static let empty = Snapshot(

@@ -72,7 +72,7 @@ struct CategoryRow: View {
     private var canTickAll: Bool { model.hasIdle(category.id) || state != .none }
     private var shown: [Item] { maxItems.map { Array(category.items.prefix($0)) } ?? category.items }
     private var idleCount: Int { category.items.filter { $0.judgement.verdict == .idle }.count }
-    private var idleCores: Double { Creek.idleCores(category) }
+    private var idleCores: Double { Creek.idleCores(category, reclaimable: model.quickSelection.ticked) }
 
     private var subtitle: String {
         if category.id == .restart { return category.items.first?.judgement.fact ?? "" }

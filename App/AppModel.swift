@@ -119,6 +119,11 @@ final class AppModel {
 
     var freedCores: Double { selection.freedCores(in: snapshot) }
 
+    /// Whether every ticked item is judged idle (Choose myself can also tick apps, which never are).
+    var selectionIsAllIdle: Bool {
+        selection.ticked.allSatisfy { snapshot.item(withID: $0)?.judgement.verdict == .idle }
+    }
+
     func isTicked(_ item: Item) -> Bool { selection.ticked.contains(item.id) }
 
     // MARK: Refresh loop
@@ -200,7 +205,7 @@ final class AppModel {
         // The widget can't read the Always-kept list, so it gets the idle count from here. It needs no
         // item details or signals (command lines, paths), so they stay in the app.
         writeSnapshot(
-            fresh.withQuickSummary(idleCount: quick.count, freedCores: quick.freedCores(in: fresh)).forWidget(),
+            fresh.withQuickSummary(idleCount: quick.count, freedCores: quick.freedCores(in: fresh), reclaimable: quick.ticked).forWidget(),
             reloadWidgets: widgetChanged
         )
     }
@@ -328,9 +333,13 @@ final class AppModel {
         return parts
     }
 
+    /// Holds the same busy flag as a cleanup, so an Undo never runs alongside one (the Cleaner is
+    /// reentrant across its awaits).
     func undoLast() async {
         let tokens = lastUndo
-        guard !tokens.isEmpty else { return }
+        guard !tokens.isEmpty, !isCleaning, !cleanIdleInFlight else { return }
+        isCleaning = true
+        defer { isCleaning = false }
         lastUndo = []
         dismissToast()
         dismissOutcome()
