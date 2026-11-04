@@ -1,0 +1,68 @@
+name: Cleany
+options:
+  bundleIdPrefix: app.cleany
+  deploymentTarget:
+    macOS: "26.0"
+configFiles:
+  Debug: Config/Team.xcconfig
+  Release: Config/Team.xcconfig
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    SWIFT_VERSION: "6.0"
+    CODE_SIGN_STYLE: Automatic
+packages:
+  CleanyCore:
+    path: Packages/CleanyCore
+targets:
+  Cleany:
+    type: application
+    platform: macOS
+    sources:
+      - App
+    dependencies:
+      - package: CleanyCore
+      - target: CleanyWidget
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.cleany.Cleany
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Cleany.entitlements
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: NO
+      configs:
+        # Development signing adds get-task-allow (lets debuggers attach); a download must not have it.
+        Release:
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+  CleanyWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Widget
+      - App/Views/Creek.swift
+      - App/Views/Raccoon.swift
+    dependencies:
+      - package: CleanyCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.cleany.Cleany.Widget
+        INFOPLIST_FILE: Widget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Widget/CleanyWidget.entitlements
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+      configs:
+        Release:
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+schemes:
+  Cleany:
+    build:
+      targets:
+        Cleany: all
+    run:
+      config: Debug
