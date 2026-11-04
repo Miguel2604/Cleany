@@ -1,0 +1,10 @@
+.DS_Store
+build/
+DerivedData/
+.build/
+Cleany.xcodeproj/
+Config/Team.xcconfig
+HANDOFF.md
+.impeccable/questions/
+.impeccable/review/
+.impeccable/*.local.json

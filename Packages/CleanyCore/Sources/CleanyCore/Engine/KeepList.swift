@@ -1,0 +1,52 @@
+import Foundation
+
+/// Items the user never wants pre-ticked, persisted as identity → name pairs in `UserDefaults`.
+public struct KeepList: Sendable {
+    public static let defaultsKey = "app.cleany.keepList"
+
+    /// In memory only; nothing is persisted.
+    public static let empty = KeepList(store: [:], defaults: nil)
+
+    private var store: [String: String]
+    /// `UserDefaults` is documented as thread-safe but not annotated `Sendable`.
+    nonisolated(unsafe) private let defaults: UserDefaults?
+
+    public init(defaults: UserDefaults) {
+        self.defaults = defaults
+        self.store = Self.load(defaults)
+    }
+
+    private init(store: [String: String], defaults: UserDefaults?) {
+        self.store = store
+        self.defaults = defaults
+    }
+
+    public func contains(_ id: ItemIdentity) -> Bool { store[id.rawValue] != nil }
+
+    public mutating func add(_ id: ItemIdentity, name: String) {
+        update { $0[id.rawValue] = name }
+    }
+
+    public mutating func remove(_ id: ItemIdentity) {
+        update { $0[id.rawValue] = nil }
+    }
+
+    /// Sorted by name (then identity) for a stable list.
+    public var entries: [(id: ItemIdentity, name: String)] {
+        store
+            .map { (id: ItemIdentity(rawValue: $0.key), name: $0.value) }
+            .sorted { ($0.name, $0.id.rawValue) < ($1.name, $1.id.rawValue) }
+    }
+
+    /// Re-reads the persisted list before changing it, so copies of a `KeepList` (the app's, the
+    /// menu's) never overwrite each other's additions.
+    private mutating func update(_ change: (inout [String: String]) -> Void) {
+        if let defaults { store = Self.load(defaults) }
+        change(&store)
+        defaults?.set(store, forKey: Self.defaultsKey)
+    }
+
+    private static func load(_ defaults: UserDefaults) -> [String: String] {
+        defaults.dictionary(forKey: defaultsKey) as? [String: String] ?? [:]
+    }
+}
