@@ -249,3 +249,17 @@ import Testing
     #expect(Sockets.isLocalPeer(ipv6("2001:db8::2", "::1")))
     #expect(!Sockets.isLocalPeer(ipv6("::1", "::ffff:10.0.0.1")))
 }
+
+@Test func hottestDieIgnoresOtherSensorsAndNoise() {
+    let readings: [(name: String, celsius: Double)] = [
+        ("PMU tdie1", 49.1), ("PMU2 tdie3", 52.4), ("PMU tdev1", -9202.9), ("PMU tdie9", 4000),
+        ("gas gauge battery", 60), ("NAND CH0 temp", 70),
+    ]
+    #expect(Temperature.hottestDie(readings) == 52.4)
+    #expect(Temperature.hottestDie([("gas gauge battery", 37)]) == nil)
+}
+
+@Test func liveTemperatureIsSaneWhenPresent() {
+    guard let c = Temperature.cpuCelsius() else { return }
+    #expect((1...150).contains(c))
+}

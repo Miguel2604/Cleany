@@ -56,11 +56,15 @@ enum Creek {
         }
     }
 
-    /// "35m left on battery", or "Plugged in".
+    /// "35m left on battery · 48°C", or "Plugged in" when the temperature can't be read.
     static func batteryLine(_ snapshot: Snapshot) -> String {
-        guard let battery = snapshot.battery else { return "No battery" }
-        guard battery.onBattery else { return "Plugged in" }
-        return battery.minutesLeft.map { "\(minutes($0)) left on battery" } ?? "On battery"
+        let power: String
+        if let battery = snapshot.battery {
+            power = battery.onBattery ? battery.minutesLeft.map { "\(minutes($0)) left on battery" } ?? "On battery" : "Plugged in"
+        } else {
+            power = "No battery"
+        }
+        return snapshot.cpuCelsius.map { "\(power) · \(Int($0.rounded()))°C" } ?? power
     }
 
     /// "10.5": cores always with one decimal.

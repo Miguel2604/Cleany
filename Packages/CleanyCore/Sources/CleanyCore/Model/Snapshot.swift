@@ -7,6 +7,8 @@ public struct Snapshot: Codable, Hashable, Sendable {
     public let swapUsedBytes: UInt64
     public let swapTotalBytes: UInt64
     public let uptime: TimeInterval
+    /// The hottest CPU die in °C; `nil` when it can't be read, and in JSON written before it existed.
+    public let cpuCelsius: Double?
     public let categories: [CategorySummary]
     public let mood: Mood
     /// How many items Quick select would stop right now, and the cores they use. The app fills these
@@ -25,6 +27,7 @@ public struct Snapshot: Codable, Hashable, Sendable {
         swapUsedBytes: UInt64,
         swapTotalBytes: UInt64,
         uptime: TimeInterval,
+        cpuCelsius: Double? = nil,
         categories: [CategorySummary],
         mood: Mood,
         idleCount: Int = 0,
@@ -37,6 +40,7 @@ public struct Snapshot: Codable, Hashable, Sendable {
         self.swapUsedBytes = swapUsedBytes
         self.swapTotalBytes = swapTotalBytes
         self.uptime = uptime
+        self.cpuCelsius = cpuCelsius
         self.categories = categories
         self.mood = mood
         self.idleCount = idleCount
@@ -48,7 +52,7 @@ public struct Snapshot: Codable, Hashable, Sendable {
     public func withQuickSummary(idleCount: Int, freedCores: Double, reclaimable: Set<ItemIdentity> = []) -> Snapshot {
         Snapshot(
             date: date, battery: battery, coresBusy: coresBusy, swapUsedBytes: swapUsedBytes,
-            swapTotalBytes: swapTotalBytes, uptime: uptime, categories: categories, mood: mood,
+            swapTotalBytes: swapTotalBytes, uptime: uptime, cpuCelsius: cpuCelsius, categories: categories, mood: mood,
             idleCount: idleCount, freedCores: freedCores, reclaimable: reclaimable
         )
     }
@@ -67,7 +71,7 @@ public struct Snapshot: Codable, Hashable, Sendable {
         }
         return Snapshot(
             date: date, battery: battery, coresBusy: coresBusy, swapUsedBytes: swapUsedBytes,
-            swapTotalBytes: swapTotalBytes, uptime: uptime, categories: lean, mood: mood,
+            swapTotalBytes: swapTotalBytes, uptime: uptime, cpuCelsius: cpuCelsius, categories: lean, mood: mood,
             idleCount: idleCount, freedCores: freedCores, reclaimable: reclaimable
         )
     }
@@ -81,6 +85,7 @@ public struct Snapshot: Codable, Hashable, Sendable {
         swapUsedBytes = try c.decode(UInt64.self, forKey: .swapUsedBytes)
         swapTotalBytes = try c.decode(UInt64.self, forKey: .swapTotalBytes)
         uptime = try c.decode(TimeInterval.self, forKey: .uptime)
+        cpuCelsius = try c.decodeIfPresent(Double.self, forKey: .cpuCelsius)
         categories = try c.decode([CategorySummary].self, forKey: .categories)
         mood = try c.decode(Mood.self, forKey: .mood)
         idleCount = try c.decodeIfPresent(Int.self, forKey: .idleCount) ?? 0
@@ -89,7 +94,7 @@ public struct Snapshot: Codable, Hashable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case date, battery, coresBusy, swapUsedBytes, swapTotalBytes, uptime, categories, mood, idleCount, freedCores, reclaimable
+        case date, battery, coresBusy, swapUsedBytes, swapTotalBytes, uptime, cpuCelsius, categories, mood, idleCount, freedCores, reclaimable
     }
 
     public static let empty = Snapshot(

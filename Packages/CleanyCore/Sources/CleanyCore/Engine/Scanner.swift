@@ -12,6 +12,7 @@ public struct SystemProbe: Sendable {
     public var battery: @Sendable () -> BatteryReading?
     public var swap: @Sendable () -> (used: UInt64, total: UInt64)
     public var uptime: @Sendable () -> TimeInterval
+    public var temperature: @Sendable () -> Double?
     public var ownPID: Int32
     /// How long `freshContext()` watches CPU before acting, so modules can re-judge activity right
     /// before a stop. `.zero` → no sample (empty CPU map).
@@ -25,6 +26,7 @@ public struct SystemProbe: Sendable {
         battery: @escaping @Sendable () -> BatteryReading? = Battery.read,
         swap: @escaping @Sendable () -> (used: UInt64, total: UInt64) = SystemMemory.swap,
         uptime: @escaping @Sendable () -> TimeInterval = SystemMemory.uptime,
+        temperature: @escaping @Sendable () -> Double? = Temperature.cpuCelsius,
         ownPID: Int32 = getpid(),
         freshSampleInterval: Duration = .seconds(1)
     ) {
@@ -35,6 +37,7 @@ public struct SystemProbe: Sendable {
         self.battery = battery
         self.swap = swap
         self.uptime = uptime
+        self.temperature = temperature
         self.ownPID = ownPID
         self.freshSampleInterval = freshSampleInterval
     }
@@ -132,6 +135,7 @@ public actor Scanner {
             swapUsedBytes: swap.used,
             swapTotalBytes: swap.total,
             uptime: probe.uptime(),
+            cpuCelsius: probe.temperature(),
             categories: categories,
             mood: StatusCalculator.mood(battery: battery, coresBusy: coresBusy, drainHistory: sustainedDrain(at: now))
         )
