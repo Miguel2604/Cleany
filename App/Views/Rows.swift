@@ -2,9 +2,11 @@ import AppKit
 import CleanyCore
 import SwiftUI
 
-/// A 16 pt checkbox in ink: empty, partly ticked (a bar), or ticked.
+/// A 16 pt checkbox in ink: empty, partly ticked (a bar), or ticked. One that can't tick right now
+/// (in use, nothing idle yet) has a dashed outline; clicking it explains why instead.
 struct TickBox: View {
     let state: TickState
+    var available = true
     var size: CGFloat = 16
 
     var body: some View {
@@ -15,9 +17,12 @@ struct TickBox: View {
                 Image(systemName: state == .all ? "checkmark" : "minus")
                     .font(.system(size: size * 0.6, weight: .bold))
                     .foregroundStyle(Color(nsColor: .textBackgroundColor))
+            case .none where available:
+                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.45), lineWidth: 1.5)
             case .none:
                 RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.4), lineWidth: 1.5)
+                    .strokeBorder(Color.primary.opacity(0.3), style: StrokeStyle(lineWidth: 1.2, dash: [2.5, 2]))
             }
         }
         .frame(width: size, height: size)
@@ -115,17 +120,22 @@ struct CategoryRow: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 16, height: 16)
             } else {
-                Button { model.toggleCategory(category.id) } label: {
-                    TickBox(state: state)
-                        .opacity(canTickAll ? 1 : 0.35)
+                Button {
+                    if canTickAll {
+                        model.toggleCategory(category.id)
+                    } else {
+                        withAnimation(.snappy(duration: 0.25)) { isOpen = true }
+                        model.explainNothingToTick(category.id)
+                    }
+                } label: {
+                    TickBox(state: state, available: canTickAll)
                         .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, -4)
-                .disabled(!canTickAll)
-                .help(canTickAll ? "Tick the idle ones" : "Nothing idle here: open it to tick items yourself")
-                .accessibilityLabel("Tick idle \(Creek.name(category.id))")
+                .help(canTickAll ? "Tick the idle ones" : "Nothing idle here yet: click to see why")
+                .accessibilityLabel(canTickAll ? "Tick idle \(Creek.name(category.id))" : "Nothing idle in \(Creek.name(category.id)): show why")
                 .accessibilityAddTraits(state == .all ? .isSelected : [])
             }
 
@@ -183,16 +193,17 @@ struct ItemRow: View {
             if verdict == .advice || verdict == .check {
                 Color.clear.frame(width: 16, height: 16)
             } else {
-                Button { model.toggle(item) } label: {
-                    TickBox(state: model.isTicked(item) ? .all : .none)
-                        .opacity(tickable ? 1 : 0.35)
+                // In use can't be ticked (uncertain means in use); its box opens the "?" sheet, which
+                // says why and offers Stop anyway.
+                Button { if tickable { model.toggle(item) } else { onExplain() } } label: {
+                    TickBox(state: model.isTicked(item) ? .all : .none, available: tickable)
                         .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, -4)
-                .disabled(!tickable)
-                .accessibilityLabel("Tick \(item.name)")
+                .help(tickable ? "Tick to clean up" : "In use: see why, or stop it anyway")
+                .accessibilityLabel(tickable ? "Tick \(item.name)" : "\(item.name) is in use: show why")
                 .accessibilityAddTraits(model.isTicked(item) ? .isSelected : [])
             }
 

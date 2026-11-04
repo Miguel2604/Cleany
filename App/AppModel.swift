@@ -379,6 +379,15 @@ final class AppModel {
         await refresh(forceExternal: true)
     }
 
+    /// A category box with nothing it could tick was clicked: say why instead of doing nothing.
+    func explainNothingToTick(_ id: CategoryID) {
+        let now = Date()
+        let text = id == .apps ? "Apps are ticked one by one"
+            : snapshot.watchingUntil(now: now).flatMap { WatchingHint.text(until: $0, now: now) }
+            ?? "Nothing idle in \(Creek.name(id)) right now"
+        show(ToastState(text), for: .seconds(3))
+    }
+
     /// Adds the item to "Always kept" (Quick select never ticks it again) and unticks it.
     func keep(_ item: Item) {
         keepList.add(item.id, name: item.name)
