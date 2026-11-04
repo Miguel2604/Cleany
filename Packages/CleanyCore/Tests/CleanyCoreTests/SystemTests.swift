@@ -51,6 +51,24 @@ import Testing
     #expect(bad.status == 3 && bad.stderr == "err\n")
 }
 
+@Test func commandRunnerWaitsForAChildThatClosedItsPipes() async {
+    // Both pipes reach EOF long before the exit: the runner must stop listening to them and wait for the exit.
+    let clock = ContinuousClock()
+    let start = clock.now
+    let r = await CommandRunner.run("/bin/sh", ["-c", "exec >&- 2>&-; sleep 0.4; exit 7"], timeout: .seconds(5))
+    #expect(r.status == 7 && !r.timedOut)
+    #expect(clock.now - start < .seconds(3))
+}
+
+@Test func commandRunnerReturnsWhenTheChildExitsWhileAGrandchildHoldsThePipes() async {
+    let clock = ContinuousClock()
+    let start = clock.now
+    let r = await CommandRunner.run("/bin/sh", ["-c", "sleep 5 & echo started; exit 4"], timeout: .seconds(10))
+    #expect(r.status == 4 && !r.timedOut)
+    #expect(r.stdout == "started\n")
+    #expect(clock.now - start < .seconds(3))
+}
+
 @Test func commandRunnerDoesNotDeadlockOnLargeOutput() async {
     let r = await CommandRunner.run("/usr/bin/yes", ["abcdefghij"], timeout: .milliseconds(500))
     #expect(r.timedOut)

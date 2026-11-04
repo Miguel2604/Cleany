@@ -88,10 +88,9 @@ public actor Scanner {
 
     /// Last items each module (by index) answered with, possibly from an older context.
     private var lastGood: [Int: [Item]] = [:]
-    /// Scans that haven't answered yet, with the scan generation whose context they judge; reused
-    /// instead of piling up another call to a stuck module.
-    private var inFlight: [Int: (generation: Int, task: Task<[Item], Never>)] = [:]
-    private var generation = 0
+    /// Scans that timed out and haven't been collected, holding their answer once it lands (judged
+    /// against an older context); reused instead of piling up another call to a stuck module.
+    private var inFlight: [Int: OSAllocatedUnfairLock<[Item]?>] = [:]
     private var drainSamples: [(date: Date, watts: Double)] = []
 
     public init(modules: [any CategoryModule], categoryTimeout: Duration = .seconds(25), probe: SystemProbe = .live) {
@@ -106,8 +105,7 @@ public actor Scanner {
         let cpu = await sampler.sample(table, at: now)
         let ctx = await probe.context(now: now, processes: table, cpu: cpu, runExternal: runExternal)
 
-        generation += 1
-        let (fresh, late) = await runModules(ctx, generation: generation)
+        let (fresh, late) = await runModules(ctx)
         for (index, items) in fresh.merging(late, uniquingKeysWith: { a, _ in a }) { lastGood[index] = items }
 
         // Only answers judged against this scan's context count. Anything older stays visible but
@@ -148,12 +146,28 @@ public actor Scanner {
 
     /// `fresh`: answers judged against `ctx`, within the timeout. `late`: answers that arrived now
     /// from scans started by an earlier refresh (judged against an older context).
-    private func runModules(_ ctx: ScanContext, generation: Int) async -> (fresh: [Int: [Item]], late: [Int: [Item]]) {
-        var tasks: [(index: Int, generation: Int, task: Task<[Item], Never>)] = []
+    private func runModules(_ ctx: ScanContext) async -> (fresh: [Int: [Item]], late: [Int: [Item]]) {
+        var tasks: [(index: Int, task: Task<[Item], Never>)] = []
+        var late: [Int: [Item]] = [:]
         for (index, module) in modules.enumerated() {
-            let running = inFlight[index] ?? (generation, Task.detached { await module.scan(ctx) })
-            inFlight[index] = running
-            tasks.append((index, running.generation, running.task))
+            if let running = inFlight[index] {
+                // Still going from an earlier refresh, which already gave it its timeout: take its answer
+                // if it has landed, but never wait on it again (a stuck module would gather one waiter
+                // per refresh, forever).
+                if let items = running.withLock({ $0 }) {
+                    inFlight[index] = nil
+                    late[index] = items
+                }
+                continue
+            }
+            let answer = OSAllocatedUnfairLock<[Item]?>(initialState: nil)
+            let task = Task.detached {
+                let items = await module.scan(ctx)
+                answer.withLock { $0 = items }
+                return items
+            }
+            inFlight[index] = answer
+            tasks.append((index, task))
         }
         let timeout = categoryTimeout
         let answered = await withTaskGroup(of: (Int, [Item]?).self) { group in
@@ -166,11 +180,10 @@ public actor Scanner {
             }
             return answered
         }
-        var fresh: [Int: [Item]] = [:], late: [Int: [Item]] = [:]
-        for entry in tasks {
-            guard let items = answered[entry.index] else { continue }
-            inFlight[entry.index] = nil
-            if entry.generation == generation { fresh[entry.index] = items } else { late[entry.index] = items }
+        var fresh: [Int: [Item]] = [:]
+        for (index, items) in answered {
+            inFlight[index] = nil
+            fresh[index] = items
         }
         return (fresh, late)
     }

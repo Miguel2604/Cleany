@@ -35,7 +35,8 @@ public enum CommandRunner {
     public static func run(_ launchPath: String, _ args: [String], timeout: Duration = .seconds(20)) async -> CommandResult {
         let deadlineMillis = max(0, Int(timeout.components.seconds) * 1000 + Int(timeout.components.attoseconds / 1_000_000_000_000_000))
         return await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            // Utility: these are background probes, and the thread spends its life blocked in kevent.
+            DispatchQueue.global(qos: .utility).async {
                 continuation.resume(returning: runBlocking(launchPath, args, timeoutMillis: deadlineMillis))
             }
         }
@@ -103,26 +104,47 @@ public enum CommandRunner {
         for fd in [outPipe[0], errPipe[0]] { _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) }
 
         var out = Capture(), err = Capture()
+        var buffer = [UInt8](repeating: 0, count: 65_536)
         var exitStatus: Int32?
         var timedOut = false
         let start = DispatchTime.now().uptimeNanoseconds
 
+        // Sleep in kevent until a pipe has data or EOF, the child exits, or the deadline passes: no
+        // periodic wakeups while a child is silent. A child that already exited fails the EVFILT_PROC
+        // registration, which is fine: waitpid below catches it on the first pass.
+        let queue = kqueue()
+        guard queue >= 0 else {
+            kill(-pid, SIGKILL); kill(pid, SIGKILL)
+            var status: Int32 = 0
+            while waitpid(pid, &status, 0) < 0, errno == EINTR {}
+            return failure("kqueue failed")
+        }
+        defer { close(queue) }
+        func change(_ ident: Int32, _ filter: Int32, _ flags: Int32, _ fflags: UInt32 = 0) {
+            var event = kevent(ident: UInt(ident), filter: Int16(filter), flags: UInt16(flags), fflags: fflags, data: 0, udata: nil)
+            _ = kevent(queue, &event, 1, nil, 0, nil)
+        }
+        change(outPipe[0], EVFILT_READ, EV_ADD)
+        change(errPipe[0], EVFILT_READ, EV_ADD)
+        change(pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, UInt32(NOTE_EXIT))
+
         while true {
-            var fds: [pollfd] = []
-            if !out.closed { fds.append(pollfd(fd: outPipe[0], events: Int16(POLLIN), revents: 0)) }
-            if !err.closed { fds.append(pollfd(fd: errPipe[0], events: Int16(POLLIN), revents: 0)) }
+            let wasOpen = (out.closed, err.closed)
+            out.drain(outPipe[0], into: &buffer, limit: captureLimit)
+            err.drain(errPipe[0], into: &buffer, limit: captureLimit)
+            // A pipe at EOF stays readable forever: stop listening to it, or kevent would spin.
+            if out.closed, !wasOpen.0 { change(outPipe[0], EVFILT_READ, EV_DELETE) }
+            if err.closed, !wasOpen.1 { change(errPipe[0], EVFILT_READ, EV_DELETE) }
+
+            var status: Int32 = 0
+            if waitpid(pid, &status, WNOHANG) == pid { exitStatus = status; break }
 
             let elapsed = Int((DispatchTime.now().uptimeNanoseconds - start) / 1_000_000)
             let remaining = timeoutMillis - elapsed
             if remaining <= 0 { timedOut = true; break }
-
-            // Short ticks keep exit detection prompt even if the child closed its pipes early.
-            _ = poll(&fds, nfds_t(fds.count), Int32(min(remaining, fds.isEmpty ? 5 : 50)))
-            out.drain(outPipe[0], limit: captureLimit)
-            err.drain(errPipe[0], limit: captureLimit)
-
-            var status: Int32 = 0
-            if waitpid(pid, &status, WNOHANG) == pid { exitStatus = status; break }
+            var wait = timespec(tv_sec: remaining / 1000, tv_nsec: (remaining % 1000) * 1_000_000)
+            var fired: [kevent] = Array(repeating: kevent(ident: 0, filter: 0, flags: 0, fflags: 0, data: 0, udata: nil), count: 3)
+            _ = kevent(queue, nil, 0, &fired, 3, &wait)
         }
 
         if timedOut {
@@ -133,8 +155,8 @@ public enum CommandRunner {
             exitStatus = status
         }
         // Pick up anything the child wrote just before it exited or was killed.
-        out.drain(outPipe[0], limit: captureLimit)
-        err.drain(errPipe[0], limit: captureLimit)
+        out.drain(outPipe[0], into: &buffer, limit: captureLimit)
+        err.drain(errPipe[0], into: &buffer, limit: captureLimit)
 
         return CommandResult(
             status: decode(exitStatus ?? -1),
@@ -155,10 +177,9 @@ public enum CommandRunner {
         var data = Data()
         var closed = false
 
-        /// Reads whatever is available without blocking; marks EOF.
-        mutating func drain(_ fd: Int32, limit: Int) {
+        /// Reads whatever is available without blocking, through the caller's reused buffer; marks EOF.
+        mutating func drain(_ fd: Int32, into buffer: inout [UInt8], limit: Int) {
             guard !closed else { return }
-            var buffer = [UInt8](repeating: 0, count: 65_536)
             while true {
                 let n = read(fd, &buffer, buffer.count)
                 if n > 0 {

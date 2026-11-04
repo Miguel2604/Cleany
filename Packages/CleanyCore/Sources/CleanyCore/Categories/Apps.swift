@@ -12,6 +12,7 @@ public actor ActivationLog {
     public static let shared = ActivationLog(suiteName: "app.cleany")
 
     private static let activationsKey = "activationLog.lastActivated"
+    static let forgetAfter: TimeInterval = 30 * 86_400
     private static let trackingKey = "activationLog.trackingSince"
 
     private let defaults: UserDefaults
@@ -40,6 +41,8 @@ public actor ActivationLog {
         let stamp = date.timeIntervalSince1970
         guard stamp > (activations[bundleID] ?? -.infinity) else { return }
         activations[bundleID] = stamp
+        // Apps not in front for 30 days are forgotten, so the log stays as long as the apps in use.
+        activations = activations.filter { stamp - $0.value < Self.forgetAfter }
         defaults.set(activations, forKey: Self.activationsKey)
     }
 

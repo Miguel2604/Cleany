@@ -21,7 +21,13 @@ final class AppModel {
     static let lastWarningKey = "drainMonitor.lastWarning"
     static let visibleInterval: TimeInterval = 5
     static let backgroundInterval: TimeInterval = 60
+    /// External commands (docker, simctl) cost far more than the native readers. While nobody looks
+    /// they run every other background scan: two 60 s cycles plus slack stay inside
+    /// `ObservationWindow.maxGap` (150 s), so container watching never restarts for it.
     static let externalInterval: TimeInterval = 30
+    static let backgroundExternalInterval: TimeInterval = 110
+    /// The widget re-reads every 5 minutes; a snapshot nothing changed in is shared no more often.
+    static let widgetWriteInterval: TimeInterval = 5 * 60
     /// WidgetKit may skip reloads; ask again at least this often so the widget never shows a false
     /// "Open Cleany" (it calls a snapshot older than 15 minutes stale).
     static let widgetReloadInterval: TimeInterval = 10 * 60
@@ -86,7 +92,14 @@ final class AppModel {
     @ObservationIgnored private var signalGate = CleanupSignalGate()
     @ObservationIgnored private var workspaceObservers: [any NSObjectProtocol] = []
     /// Snapshots for the widget, written in order by one consumer (newest wins).
-    @ObservationIgnored private var snapshotOutbox: AsyncStream<(Snapshot, Bool, UInt64)>.Continuation?
+    @ObservationIgnored private var snapshotOutbox: AsyncStream<(Snapshot, UInt64)>.Continuation?
+    /// The newest snapshot sequence that asked for a widget reload, 0 for none. Kept apart from the
+    /// stream, which holds only the newest snapshot, so dropping an older one never loses its reload.
+    @ObservationIgnored private let widgetReloadAt = OSAllocatedUnfairLock<UInt64>(initialState: 0)
+    @ObservationIgnored private var lastWidgetWrite: Date?
+    /// The screens went to sleep on battery: scanning is paused until they wake (nobody is looking,
+    /// and every scan costs battery). Plugged in, watching carries on so no evidence is lost.
+    @ObservationIgnored private var pausedForScreenSleep = false
     /// Counts snapshots as they are made, so the writer keeps their order whatever the clock does.
     @ObservationIgnored private var snapshotSequence: UInt64 = 0
     @ObservationIgnored private var lastWidgetReload: Date?
@@ -140,7 +153,9 @@ final class AppModel {
                 // Sleep until the next refresh is due. Opening or closing the window or popover cancels
                 // the sleep, and the wait is worked out again for the new interval.
                 while !Task.isCancelled, let wait = self.timeUntilDue, wait > 0 {
-                    let sleeper = Task<Void, Never> { try? await Task.sleep(for: .seconds(wait)) }
+                    // Tolerance lets the system coalesce this wakeup with others.
+                    let tolerance: Duration = self.isVisible ? .milliseconds(500) : .seconds(4)
+                    let sleeper = Task<Void, Never> { try? await Task.sleep(for: .seconds(wait), tolerance: tolerance) }
                     self.sleeper = sleeper
                     await sleeper.value
                     self.sleeper = nil
@@ -152,6 +167,7 @@ final class AppModel {
     /// Seconds until the next refresh is due; nil before the first one.
     private var timeUntilDue: TimeInterval? {
         guard let lastRefresh else { return nil }
+        if pausedForScreenSleep { return 86_400 }   // the screens waking cancels this sleep
         let interval = isVisible ? Self.visibleInterval : Self.backgroundInterval
         return interval - Date().timeIntervalSince(lastRefresh)
     }
@@ -170,7 +186,8 @@ final class AppModel {
     func refresh(forceExternal: Bool) async {
         while let running = scanTask { await running.value }
         let now = Date()
-        let runExternal = forceExternal || lastExternal.map { now.timeIntervalSince($0) >= Self.externalInterval } ?? true
+        let externalInterval = isVisible ? Self.externalInterval : Self.backgroundExternalInterval
+        let runExternal = forceExternal || lastExternal.map { now.timeIntervalSince($0) >= externalInterval } ?? true
         if runExternal { lastExternal = now }
         let scanner = self.scanner
         // Runs on the main actor only to apply the result; the scan itself runs on the Scanner actor.
@@ -202,6 +219,9 @@ final class AppModel {
             || lastWidgetReload.map { now.timeIntervalSince($0) >= Self.widgetReloadInterval } ?? true
         if widgetChanged { lastWidgetReload = now }
         warnIfDrainingFast(fresh)
+        // Shared when the widget would show something new, otherwise at the widget's own pace.
+        guard widgetChanged || lastWidgetWrite.map({ now.timeIntervalSince($0) >= Self.widgetWriteInterval }) ?? true else { return }
+        lastWidgetWrite = now
         // The widget can't read the Always-kept list, so it gets the idle count from here. It needs no
         // item details or signals (command lines, paths), so they stay in the app.
         writeSnapshot(
@@ -215,14 +235,23 @@ final class AppModel {
     /// the widget never reads the previous snapshot.
     private func startSnapshotSharing() {
         guard let groupID, !groupID.hasPrefix("."), let url = SnapshotStore.url(groupID: groupID) else { return }
-        let (stream, outbox) = AsyncStream.makeStream(of: (Snapshot, Bool, UInt64).self)
+        // Only the newest unwritten snapshot waits: a stalled App Group write never queues up more.
+        let (stream, outbox) = AsyncStream.makeStream(of: (Snapshot, UInt64).self, bufferingPolicy: .bufferingNewest(1))
         snapshotOutbox = outbox
         let writer = SnapshotWriter(url: url)
         let log = self.log
+        let reloadAt = widgetReloadAt
         Task.detached(priority: .utility) {
-            for await (snapshot, reload, sequence) in stream {
+            for await (snapshot, sequence) in stream {
                 do {
-                    if try await writer.write(snapshot, sequence: sequence), reload { WidgetCenter.shared.reloadAllTimelines() }
+                    guard try await writer.write(snapshot, sequence: sequence) else { continue }
+                    // Reload once the snapshot that asked for it (or a newer one) is on disk.
+                    let due = reloadAt.withLock { at in
+                        guard at != 0, sequence >= at else { return false }
+                        at = 0
+                        return true
+                    }
+                    if due { WidgetCenter.shared.reloadAllTimelines() }
                 } catch {
                     log.error("Snapshot not shared: \(String(describing: error), privacy: .public)")
                 }
@@ -232,7 +261,9 @@ final class AppModel {
 
     private func writeSnapshot(_ s: Snapshot, reloadWidgets: Bool) {
         snapshotSequence += 1
-        snapshotOutbox?.yield((s, reloadWidgets, snapshotSequence))
+        let sequence = snapshotSequence
+        if reloadWidgets { widgetReloadAt.withLock { $0 = sequence } }
+        snapshotOutbox?.yield((s, sequence))
     }
 
     // MARK: Ticks
@@ -398,6 +429,27 @@ final class AppModel {
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { _ in
             Task { @MainActor in await AppModel.shared.scanner.restartObservation() }
+        })
+        // Screens asleep on battery: stop scanning until they wake, then start watching afresh.
+        workspaceObservers.append(NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in
+                let model = AppModel.shared
+                model.pausedForScreenSleep = Battery.read()?.onBattery == true
+                model.wakeRefreshLoop()   // re-plans the current sleep under the pause
+            }
+        })
+        workspaceObservers.append(NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in
+                let model = AppModel.shared
+                guard model.pausedForScreenSleep else { return }
+                model.pausedForScreenSleep = false
+                await model.scanner.restartObservation()
+                model.wakeRefreshLoop()
+            }
         })
 
         // Apps are judged idle by when they were last in front, so stamp on both edges: activation

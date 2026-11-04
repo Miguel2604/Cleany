@@ -94,18 +94,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
+    /// What the status item last showed: every scan invalidates the observation, but the button is
+    /// only touched when what it shows changes.
+    private var shownStatus: (idle: Bool, title: String, label: String)?
+
     private func updateStatusItem() {
         guard let button = statusItem.button else { return }
         let snapshot = model.snapshot
-        let idle = model.hasScanned && model.quickSelection.count > 0
-        button.image = MenuBarGlyph.image(idle: idle)
+        let idleCount = model.hasScanned ? model.quickSelection.count : 0
         var minutes: String?
         if model.hasScanned, let battery = snapshot.battery, battery.onBattery, let left = battery.minutesLeft {
             minutes = Creek.minutes(left)
         }
-        button.title = minutes.map { " \($0)" } ?? ""
-        let idleText = idle ? "\(model.quickSelection.count) idle" : nil
-        button.setAccessibilityLabel(["Cleany", Creek.title(snapshot.mood), idleText, minutes.map { "\($0) left" }].compactMap { $0 }.joined(separator: ", "))
+        let title = minutes.map { " \($0)" } ?? ""
+        let idleText = idleCount > 0 ? "\(idleCount) idle" : nil
+        let label = ["Cleany", Creek.title(snapshot.mood), idleText, minutes.map { "\($0) left" }].compactMap { $0 }.joined(separator: ", ")
+        if let shown = shownStatus, shown == (idleCount > 0, title, label) { return }
+        shownStatus = (idleCount > 0, title, label)
+        button.image = MenuBarGlyph.image(idle: idleCount > 0)
+        button.title = title
+        button.setAccessibilityLabel(label)
     }
 
     @objc func togglePopover() {

@@ -346,6 +346,16 @@ extension EngineTests {
             #expect(!Selection.quick(second, keep: .empty).ticked.contains(sim.id))       // the stale simulator isn't
         }
 
+        @Test func aStuckModuleIsWaitedOnOnlyOnce() async {
+            // Every refresh used to attach another waiter to the same stuck scan; now only the first waits.
+            let scanner = Scanner(modules: [HangingModule(id: .simulators)], categoryTimeout: .milliseconds(600), probe: FakeMachine().probe)
+            _ = await scanner.scan(runExternal: true)
+            let clock = ContinuousClock()
+            let start = clock.now
+            _ = await scanner.scan(runExternal: true)
+            #expect(clock.now - start < .milliseconds(400))
+        }
+
         @Test func lateResultFromAnOlderContextIsNotFresh() async throws {
             let sim = Item.fixtureSimulator(udid: "U", name: "S", verdict: .idle, cores: 1)
             let scanner = Scanner(

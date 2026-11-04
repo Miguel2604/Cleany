@@ -53,6 +53,8 @@ public actor Explainer {
         if let answer = await Self.race(item, timeout: timeout, generate: generate),
            let clean = Self.validated(answer) {
             let explanation = Explanation(whatIsIt: clean.whatIsIt, whatYouLose: clean.whatYouLose, byAI: true)
+            // shortcut: starts over past 100 entries rather than evicting the oldest; fine for a "?" cache.
+            if cache.count >= 100 { cache.removeAll() }
             cache[item.id] = explanation
             return explanation
         }
