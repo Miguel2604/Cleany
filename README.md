@@ -3,17 +3,18 @@
 # Cleany
 
 **See what is draining your Mac's battery, and stop the idle culprits in one click.**
-A menu bar app, a window and a widget for macOS 26. Its mark sits in your menu bar and splits off a
-small stretch when something idle can be cleaned up. Cleany never touches anything that is in use.
+A menu bar app, a window and a widget for macOS 26. Monochrome and dot-matrix, in the same language as
+[Headroom](https://github.com/Miguel2604/headroom). Its mark sits in your menu bar and grows a small
+stretch when something idle can be cleaned up. Cleany never touches anything that is in use.
 
 Built for developers: forgotten iOS Simulators, Docker containers, dev servers, idle apps and
 runaway browser tabs are what usually eat the battery.
 
 ## Features
 
-- **The creek band.** Each category gets a stretch of the strip as wide as its exact share of the
-  CPU in use, and the idle part of each stretch is green. You see the cause, and what you can get
-  back, before you read anything.
+- **Dot meters.** The machine and each category get a row of dots for their share of the CPU in use:
+  filled is in use, hollow is idle and can come back, dim is neither. You see the cause, and what you
+  can get back, before you read anything.
 - **Quick select** ticks everything idle. **Choose myself** leaves the ticks to you.
 - **Every item explains itself.** The **?** says what it is, why Cleany thinks it is idle or in use,
   and what you lose by stopping it.
@@ -43,6 +44,11 @@ that macOS renders in Liquid Glass); `Scripts/render-icon.sh` exports `docs/icon
 
 Debug builds take `-debugDemo YES` (a made-up busy Mac, cleanups are dry runs), `-dryRunCleanup YES`,
 `-debugOpen main|popover` and `-debugAppearance dark|light`.
+
+## Fonts
+
+[Doto](https://fonts.google.com/specimen/Doto) and [Fragment Mono](https://fonts.google.com/specimen/Fragment+Mono),
+both under the SIL Open Font License (`App/Fonts`).
 
 ## Credits
 

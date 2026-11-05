@@ -38,9 +38,11 @@ Lives in the menu bar (glance + popover that does the whole job), a main window 
 ## Brand Commitments
 
 - Name: Cleany.
-- Mark: the creek band bent into a C, open on the right, with its last stretch split off in green (what can come back). App icon (`App/AppIcon.icon`), menu bar (the stretch shows only while something idle can be cleaned up), Settings and the widget. No mascot.
-- Colour: ink and two greys, one green on data (idle, what comes back), red only on Stop anyway.
-- Liquid Glass (macOS 26 design language) is a binding user requirement.
+- Mark: a C on a 5×5 dot grid, with its last stretch set apart as hollow dots (what can come back). App icon (`App/AppIcon.icon`), menu bar (the stretch shows only while something idle can be cleaned up), Settings and the widget. No mascot.
+- Design language: mirrors Headroom (`Miguel2604/headroom`). Monochrome, dot-matrix. Doto for numbers and the verdict, uppercase Fragment Mono for labels, Fragment Mono as is for item names and prose.
+- Dots: filled is in use, hollow is idle and can come back, dim is neither.
+- Colour: ink at a few opacities, and an inverted pill for what wants attention. Red only on Stop anyway.
+- Liquid Glass (macOS 26 design language) is a binding user requirement: tinted, true-neutral glass.
 
 ## Evidence on Hand
 

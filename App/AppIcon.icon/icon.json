@@ -1,13 +1,13 @@
 {
   "fill": {
-    "automatic-gradient": "extended-srgb:0.10980,0.11373,0.12157,1.00000"
+    "automatic-gradient": "extended-srgb:0.04706,0.04706,0.04706,1.00000"
   },
   "groups": [
     {
       "layers": [
         {
-          "image-name": "Accent.svg",
-          "name": "Accent"
+          "image-name": "Stretch.svg",
+          "name": "Stretch"
         }
       ],
       "shadow": {
@@ -23,8 +23,8 @@
     {
       "layers": [
         {
-          "image-name": "Ring.svg",
-          "name": "Ring"
+          "image-name": "Dots.svg",
+          "name": "Dots"
         }
       ],
       "shadow": {
