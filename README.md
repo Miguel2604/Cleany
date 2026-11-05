@@ -42,7 +42,7 @@ swift test --package-path Packages/CleanyCore           # the detection engine's
 ```
 
 The widget and the app share snapshots through the App Group `$(DEVELOPMENT_TEAM).app.cleany`, so
-the widget needs a real team. The app icon is an Icon Composer file (`App/AppIcon.icon`, layered SVGs
+the widget needs a real team. The app icon is an Icon Composer file (`App/AppIcon.icon`, generated dot-matrix art
 that macOS renders in Liquid Glass); `Scripts/render-icon.sh` exports `docs/icon.png` from it.
 
 Debug builds take `-debugDemo YES` (a made-up busy Mac, cleanups are dry runs), `-dryRunCleanup YES`,
