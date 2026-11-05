@@ -29,14 +29,18 @@ struct SettingsView: View {
             }
 
             Section {
-                Picker("Background", selection: $background) {
-                    Text("Tinted glass").tag(Backdrop.tinted)
-                    Text("Fully clear").tag(Backdrop.clear)
+                pickerRow("Background") {
+                    Picker("Background", selection: $background) {
+                        Text("Tinted glass").tag(Backdrop.tinted)
+                        Text("Fully clear").tag(Backdrop.clear)
+                    }
                 }
                 .onChange(of: background) { WidgetCenter.shared.reloadAllTimelines() }
                 Toggle("Show a panel on the desktop", isOn: $desktopPanel)
-                Picker("Layout", selection: $layout) {
-                    ForEach(DesktopLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                pickerRow("Layout") {
+                    Picker("Layout", selection: $layout) {
+                        ForEach(DesktopLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
                 }
                 .disabled(!desktopPanel)
                 Toggle("Lock position", isOn: $locked).disabled(!desktopPanel)
@@ -128,6 +132,15 @@ struct SettingsView: View {
     }
 
     private func header(_ title: String) -> some View { Text(title).lbl() }
+
+    /// A picker with its own label beside it: Form's baseline alignment drops the popup below Fragment Mono's.
+    private func pickerRow(_ title: String, @ViewBuilder picker: () -> some View) -> some View {
+        HStack {
+            Text(title).accessibilityHidden(true)
+            Spacer()
+            picker().labelsHidden().fixedSize()
+        }
+    }
 
     /// Turning it on or off asks the system; if it refuses, the switch snaps back and says why.
     private var loginBinding: Binding<Bool> {
