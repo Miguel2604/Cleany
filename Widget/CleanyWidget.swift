@@ -59,6 +59,7 @@ struct CleanyWidget: Widget {
         .configurationDisplayName("Cleany")
         .description("What is draining the battery, and a button to stop the idle culprits.")
         .supportedFamilies([.systemSmall, .systemMedium])
+        .contentMarginsDisabled()
     }
 }
 
@@ -78,32 +79,52 @@ struct CleanyWidgetView: View {
                 StaleWidget()
             }
         }
-        .containerBackground(for: .widget) { Creek.ground }
+        .containerBackground(for: .widget) { TintedGlass() }
     }
 }
 
 // MARK: - Families
 
+/// 170×170: how long the battery lasts, or the cores busy, over the machine's meter.
 struct SmallWidget: View {
     let snapshot: Snapshot
 
+    private var minutesLeft: Int? {
+        guard let battery = snapshot.battery, battery.onBattery else { return nil }
+        return battery.minutesLeft
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(Creek.title(snapshot.mood))
-                .font(.headline)
-            Text(detail(snapshot))
-                .font(.title2.weight(.semibold))
-                .monospacedDigit()
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-            CreekBand(snapshot: snapshot, reclaimable: snapshot.reclaimable, height: 8)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(minutesLeft == nil ? "Cores busy" : "Left on battery").lbl().secondary()
             Spacer(minLength: 0)
-            if snapshot.idleCount > 0 { CleanButton(count: snapshot.idleCount) }
-            else { Text(snapshot.mood == .allGood ? "Nothing idle is running." : "Everything is in use.").font(.caption).foregroundStyle(.secondary) }
+            Group {
+                if let minutesLeft {
+                    Text(Creek.minutes(minutesLeft).uppercased()).font(.doto(50))
+                } else {
+                    Creek.coresText(snapshot.coresBusy, size: 50)
+                }
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .frame(height: 50, alignment: .leading)
+            CoreMeter(snapshot: snapshot, reclaimable: snapshot.reclaimable, count: 14, size: 7).padding(.top, 12)
+            Group {
+                if snapshot.idleCount > 0 {
+                    CleanButton(count: snapshot.idleCount)
+                } else {
+                    Text(Creek.title(snapshot.mood)).lbl().secondary()
+                }
+            }
+            .frame(height: 20)
+            .padding(.top, 10)
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 
+/// 364×170: the mood as a headline, then the three categories using the most CPU.
 struct MediumWidget: View {
     let snapshot: Snapshot
 
@@ -115,77 +136,88 @@ struct MediumWidget: View {
             .prefix(3))
     }
 
+    private var line: String {
+        let cores = "\(Creek.cores(snapshot.coresBusy)) cores"
+        guard let battery = snapshot.battery, battery.onBattery, let minutes = battery.minutesLeft else { return cores }
+        return "\(Creek.minutes(minutes)) left · \(cores)"
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(Creek.title(snapshot.mood))
-                    .font(.headline)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(detail(snapshot)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(Creek.title(snapshot.mood).uppercased()).num(34).accessibilityAddTraits(.isHeader)
+            HStack {
+                Text(line).lbl()
+                Spacer(minLength: 8)
                 if snapshot.idleCount > 0 { CleanButton(count: snapshot.idleCount) }
             }
-            .frame(width: 112, alignment: .leading)
-            VStack(alignment: .leading, spacing: 7) {
-                CoresLabel(cores: snapshot.coresBusy, size: 20)
-                CreekBand(snapshot: snapshot, reclaimable: snapshot.reclaimable, height: 8)
-                if top.isEmpty {
-                    Text("Nothing is using the CPU").font(.caption).foregroundStyle(.secondary)
-                } else {
+            .frame(height: 20)
+            .padding(.top, 4)
+            Spacer(minLength: 0)
+            if top.isEmpty {
+                Text("Nothing is using the CPU").lbl().secondary()
+            } else {
+                VStack(spacing: 4) {
                     ForEach(top, id: \.id) { category in
-                        HStack(spacing: 8) {
-                            Text(Creek.name(category.id)).font(.callout.weight(.medium)).lineLimit(1)
-                            Spacer(minLength: 4)
-                            let idle = Creek.idleCores(category, reclaimable: snapshot.reclaimable)
-                            if idle >= 0.05 {
-                                Text("\(Creek.cores(idle)) idle").font(.caption).foregroundStyle(Creek.idle)
-                            }
-                            Text(Creek.cores(category.cores)).font(.callout)
+                        HStack(spacing: 12) {
+                            Text(Creek.name(category.id)).lbl().frame(width: 92, alignment: .leading)
+                            DotMeter(dots: Creek.dots(category.id, in: snapshot, reclaimable: snapshot.reclaimable, count: 16), size: 6)
+                            Creek.coresText(category.cores, size: 17).lineLimit(1).frame(width: 42, alignment: .trailing)
                         }
-                        .monospacedDigit()
+                        .accessibilityElement(children: .combine)
                     }
                 }
-                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 
 /// The app isn't running (or hasn't written a snapshot): no stale numbers, just a way in.
 struct StaleWidget: View {
     var body: some View {
-        VStack(spacing: 6) {
-            CleanyMark(size: 32, segment: false)
-            Text("Open Cleany").font(.headline)
-            Text("Numbers are out of date").font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            CleanyMark(size: 28, segment: false)
+            Spacer(minLength: 0)
+            Text("OPEN CLEANY").num(26)
+            Text("Numbers are out of date").lbl(10, lines: 2).secondary().padding(.top, 6)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 
 // MARK: - Pieces
-
-/// "35m left" on battery, "10.5 cores" otherwise, as in the menu bar.
-private func detail(_ snapshot: Snapshot) -> String {
-    if let battery = snapshot.battery, battery.onBattery, let minutes = battery.minutesLeft { return "\(Creek.minutes(minutes)) left" }
-    return "\(Creek.cores(snapshot.coresBusy)) cores"
-}
 
 private struct CleanButton: View {
     let count: Int
 
     var body: some View {
         Button(intent: CleanUpIdleIntent()) {
-            Text("Clean up \(count)")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color(nsColor: .textBackgroundColor))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(Color.primary, in: Capsule())
+            InkPill(text: "Clean up \(count)")
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// The tinted-glass fill: a dark or light translucent layer over a blur, solid under Reduce Transparency.
+private struct TintedGlass: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceTransparency) private var solid
+
+    var body: some View {
+        Group {
+            if solid {
+                scheme == .dark ? Color(white: 0.11) : Color(white: 0.95)
+            } else {
+                ZStack {
+                    Rectangle().fill(.ultraThinMaterial)
+                    scheme == .dark ? Color(white: 12 / 255).opacity(0.46) : Color.white.opacity(0.5)
+                }
+            }
+        }
+        .overlay(ContainerRelativeShape().strokeBorder(.white.opacity(scheme == .dark ? 0.1 : 0.6), lineWidth: 1))
     }
 }
 

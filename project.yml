@@ -45,6 +45,7 @@ targets:
       - Widget
       - App/Views/Creek.swift
       - App/Views/Mark.swift
+      - App/Fonts
     dependencies:
       - package: CleanyCore
     settings:

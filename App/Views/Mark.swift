@@ -1,28 +1,29 @@
 import SwiftUI
 
-/// Cleany's mark, from `App/AppIcon.icon`: the creek band bent into a C, open on the right, with its
-/// last stretch split off as the part that can come back. Same proportions as the icon (a 262 radius
-/// and a 120 stroke in its 1024 canvas), scaled so `size` is the outer diameter.
+/// Cleany's mark, from `App/AppIcon.icon`: a C on a 5×5 dot grid, with its last stretch set apart as
+/// the part that can come back: hollow here and in the icon (idle, like a meter's hollow dots).
 struct CleanyMark: View {
+    /// (column, row) from the top left.
+    static let letter = [(1, 0), (2, 0), (3, 0), (4, 0), (0, 1), (0, 2), (0, 3), (1, 4), (2, 4), (3, 4)]
+    static let stretch = [(4, 3), (4, 4)]
+
     var size: CGFloat
-    /// Shows the split-off stretch: in the menu bar, only while something idle can be cleaned up.
+    /// Shows the stretch.
     var segment = true
-    var ink: Color = .primary
-    var accent: Color = Creek.idleMark
 
     var body: some View {
-        let line = size * 120 / 644
-        let diameter = size * 524 / 644
-        // Degrees clockwise from three o'clock: the C runs 70°…320°, the stretch 40°…62°.
-        ZStack {
-            Circle().trim(from: 70 / 360, to: 320 / 360)
-                .stroke(ink, style: StrokeStyle(lineWidth: line, lineCap: .butt))
+        Canvas { context, canvas in
+            let pitch = canvas.width / 5
+            let dot = pitch * 0.8
+            let oval = { (cell: (Int, Int), inset: CGFloat) in
+                Path(ellipseIn: CGRect(x: CGFloat(cell.0) * pitch + inset + pitch * 0.1, y: CGFloat(cell.1) * pitch + inset + pitch * 0.1,
+                                       width: dot - 2 * inset, height: dot - 2 * inset))
+            }
+            for cell in Self.letter { context.fill(oval(cell, 0), with: .foreground) }
             if segment {
-                Circle().trim(from: 40 / 360, to: 62 / 360)
-                    .stroke(accent, style: StrokeStyle(lineWidth: line, lineCap: .butt))
+                for cell in Self.stretch { context.stroke(oval(cell, dot * 0.1), with: .foreground, lineWidth: dot * 0.2) }
             }
         }
-        .frame(width: diameter, height: diameter)
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }

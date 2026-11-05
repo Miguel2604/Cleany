@@ -2,7 +2,7 @@ import AppKit
 import CleanyCore
 import SwiftUI
 
-/// The menu bar popover: the creek header, the three categories using the most CPU with their
+/// The menu bar popover: the verdict header, the three categories using the most CPU with their
 /// ticks, the Clean up button, and a way into the window. Does the whole job on its own.
 struct PopoverView: View {
     @Environment(AppModel.self) private var model
@@ -21,7 +21,7 @@ struct PopoverView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            CreekHeader()
+            VerdictHeader()
                 .padding(.horizontal, 4)
             list
             if let outcome = model.outcome {
@@ -39,7 +39,10 @@ struct PopoverView: View {
         .animation(.snappy, value: model.toast?.id)
         .animation(.snappy, value: model.outcome?.id)
         .padding(16)
-        .frame(width: 360)
+        .foregroundStyle(Creek.ink)
+        .frame(width: 380)
+        // Take the full ideal height, or the popover can come up short and shrink the Doto numbers.
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -47,9 +50,9 @@ struct PopoverView: View {
         if !model.hasScanned {
             ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 60)
         } else if top.isEmpty {
-            Text("Nothing running in the background.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            Text("Nothing running in the background")
+                .lbl()
+                .secondary()
                 .frame(maxWidth: .infinity, minHeight: 60)
         } else {
             VStack(spacing: 2) {
@@ -68,28 +71,48 @@ struct PopoverView: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 6) {
-            Button { actions.openWindow(nil) } label: {
-                Text("Open Cleany")
-                    .font(.callout.weight(.medium))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Text("⌃⌥⌘C")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .help("Opens this from anywhere")
-            Spacer(minLength: 0)
+        VStack(spacing: 0) {
+            Rectangle().fill(Creek.hairline).frame(height: 1).padding(.horizontal, 4).padding(.bottom, 6)
+            MenuRow("Open Cleany", shortcut: "⌃⌥⌘C") { actions.openWindow(nil) }
             #if DEBUG
-            iconButton("bell.badge", label: "Simulate drain warning") { model.simulateDrainWarning() }
+            MenuRow("Simulate drain warning") { model.simulateDrainWarning() }
             #endif
-            iconButton("gearshape", label: "Settings") { actions.openSettings() }
-            iconButton("power", label: "Quit Cleany") { NSApp.terminate(nil) }
+            MenuRow("Settings…", shortcut: "⌘,") { actions.openSettings() }
+            MenuRow("Quit Cleany", shortcut: "⌘Q") { NSApp.terminate(nil) }
         }
+        .padding(.horizontal, -6)
+        .padding(.bottom, -6)
+    }
+}
+
+/// A menu-style row: inverts under the pointer.
+private struct MenuRow: View {
+    let title: String
+    let shortcut: String?
+    let action: () -> Void
+    @State private var hovering = false
+
+    init(_ title: String, shortcut: String? = nil, action: @escaping () -> Void) {
+        self.title = title
+        self.shortcut = shortcut
+        self.action = action
     }
 
-    private func iconButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
-        PlainIconButton(symbol: symbol, label: label, action: action)
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(title).lbl(11.5)
+                Spacer()
+                if let shortcut { Text(shortcut).font(.fragment(11.5)).opacity(0.6) }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .contentShape(Rectangle())
+            .foregroundStyle(hovering ? Creek.inverse : Creek.ink)
+            .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? Creek.ink : .clear))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 

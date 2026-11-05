@@ -25,11 +25,11 @@ struct ExplainSheet: View {
         }
     }
 
-    private var safety: (text: String, color: Color) {
+    private var safety: String {
         switch verdict {
-        case .idle: ("Safe", Creek.idle)
-        case .inUse: ("Probably being used", Color.primary)
-        case .manual, .check, .advice: ("Your call", Color.secondary)
+        case .idle: "Safe"
+        case .inUse: "Probably being used"
+        case .manual, .check, .advice: "Your call"
         }
     }
 
@@ -38,11 +38,10 @@ struct ExplainSheet: View {
             HStack(spacing: 12) {
                 ItemMedia(item: item, size: 32)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.name).font(.title3.weight(.semibold)).lineLimit(2)
+                    Text(item.name).font(.fragment(15)).lineLimit(2)
                     Text("\(Creek.name(item.category)) · \(item.judgement.fact)")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lbl()
+                        .secondary()
                 }
             }
 
@@ -59,9 +58,7 @@ struct ExplainSheet: View {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(Array(item.judgement.signals.enumerated()), id: \.offset) { _, signal in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Image(systemName: "circle.fill")
-                                    .font(.system(size: 7))
-                                    .foregroundStyle(signalColor(signal.kind))
+                                DotMark(dot: signalDot(signal.kind), size: 7)
                                 Text(signal.text).fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -71,15 +68,14 @@ struct ExplainSheet: View {
 
             section("Safe to stop?") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(safety.text)
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(safety.color)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(safety.color.opacity(0.14)))
+                    if verdict == .idle {
+                        InkPill(text: safety)
+                    } else {
+                        Text(safety).lbl()
+                    }
                     if let explanation {
                         Text(explanation.whatYouLose)
-                            .foregroundStyle(.secondary)
+                            .secondary()
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -87,20 +83,20 @@ struct ExplainSheet: View {
 
             if verdict == .check {
                 Text(Self.tabAdvice(browser: item.detail["browser"]))
-                    .font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             if explanation?.byAI == true {
                 Label("Explained by Apple Intelligence, on this Mac", systemImage: "apple.intelligence")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .lbl(10, lines: 2)
+                    .secondary()
             }
 
             buttons
         }
+        .font(.fragment(12))
         .padding(20)
-        .frame(width: 380)
+        .frame(width: 400)
         .task(id: original.id) {
             explanation = await model.explain(original)
         }
@@ -114,7 +110,7 @@ struct ExplainSheet: View {
                 Button { dismiss() } label: {
                     Text("Not now").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glass)
+                .buttonStyle(OutlineButtonStyle(minHeight: 34))
                 Button {
                     dismiss()
                     Task { await model.showRestartDialog() }
@@ -132,9 +128,7 @@ struct ExplainSheet: View {
                 // Quitting an engine stops everything in it, so it is never forced: no "Stop anyway".
                 VStack(alignment: .trailing, spacing: 8) {
                     if item.category == .containers {
-                        Text("Stop its containers first")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
+                        Text("Stop its containers first").lbl().secondary()
                     }
                     Button {
                         model.keep(item)
@@ -142,7 +136,7 @@ struct ExplainSheet: View {
                     } label: {
                         Text("Keep").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glass)
+                    .buttonStyle(OutlineButtonStyle(minHeight: 34))
                 }
             case .idle, .inUse, .manual:
                 Button {
@@ -151,7 +145,7 @@ struct ExplainSheet: View {
                 } label: {
                     Text("Keep").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glass)
+                .buttonStyle(OutlineButtonStyle(minHeight: 34))
                 Button {
                     let target = item
                     let force = verdict == .inUse
@@ -164,7 +158,6 @@ struct ExplainSheet: View {
                 .disabled(model.isCleaning || model.cleanIdleInFlight)
             }
         }
-        .controlSize(.large)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
@@ -177,17 +170,18 @@ struct ExplainSheet: View {
         return "Close the busy tab in the browser."
     }
 
-    private func signalColor(_ kind: Signal.Kind) -> Color {
+    /// The same dots as the meters: hollow is idle, filled is in use, dim says neither.
+    private func signalDot(_ kind: Signal.Kind) -> Dot {
         switch kind {
-        case .idle: Creek.idleMark
-        case .inUse: Color.primary
-        case .neutral: Color.secondary
+        case .idle: .idle
+        case .inUse: .on
+        case .neutral: .off
         }
     }
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(title).lbl().secondary().accessibilityAddTraits(.isHeader)
             content()
         }
     }

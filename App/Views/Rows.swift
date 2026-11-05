@@ -13,16 +13,16 @@ struct TickBox: View {
         ZStack {
             switch state {
             case .all, .some:
-                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).fill(Color.primary)
+                RoundedRectangle(cornerRadius: size * 0.2, style: .continuous).fill(Creek.ink)
                 Image(systemName: state == .all ? "checkmark" : "minus")
                     .font(.system(size: size * 0.6, weight: .bold))
-                    .foregroundStyle(Color(nsColor: .textBackgroundColor))
+                    .foregroundStyle(Creek.inverse)
             case .none where available:
-                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.45), lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
+                    .strokeBorder(Creek.ink.opacity(0.45), lineWidth: 1.5)
             case .none:
-                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.3), style: StrokeStyle(lineWidth: 1.2, dash: [2.5, 2]))
+                RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
+                    .strokeBorder(Creek.ink.opacity(0.3), style: StrokeStyle(lineWidth: 1.2, dash: [2.5, 2]))
             }
         }
         .frame(width: size, height: size)
@@ -30,7 +30,7 @@ struct TickBox: View {
     }
 }
 
-/// An item's picture in a fixed 18 pt slot: the real app icon for apps, a plain grey symbol otherwise.
+/// An item's picture in a fixed 18 pt slot: the real app icon in greys for apps, a plain grey symbol otherwise.
 struct ItemMedia: View {
     let item: Item
     var size: CGFloat = 18
@@ -38,7 +38,7 @@ struct ItemMedia: View {
     var body: some View {
         Group {
             if let path = item.detail["bundlePath"] {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: path)).resizable().interpolation(.high)
+                Image(nsImage: NSWorkspace.shared.icon(forFile: path)).resizable().interpolation(.high).saturation(0)
             } else {
                 Image(systemName: item.symbol)
                     .font(.system(size: size * 0.72))
@@ -62,7 +62,7 @@ private struct RowHover: ViewModifier {
     }
 }
 
-/// One category: tick, name over "3 running · 2 idle", its cores over the idle part, chevron.
+/// One category: tick, then "SIMULATORS 3 RUNNING (2 IDLE)  5.4" over its dots.
 /// Opens into its items on one lightness step: tick, picture, name over its fact, verdict, "?".
 struct CategoryRow: View {
     @Environment(AppModel.self) private var model
@@ -79,9 +79,10 @@ struct CategoryRow: View {
     private var idleCount: Int { category.items.filter { $0.judgement.verdict == .idle }.count }
     private var idleCores: Double { Creek.idleCores(category, reclaimable: model.quickSelection.ticked) }
 
+    private var running: String { "\(category.items.count) running" }
+
     private var subtitle: String {
         if category.id == .restart { return category.items.first?.judgement.fact ?? "" }
-        let running = "\(category.items.count) running"
         return idleCount > 0 ? "\(running) · \(idleCount) idle" : running
     }
 
@@ -96,7 +97,7 @@ struct CategoryRow: View {
                     if shown.count < category.items.count {
                         Button(action: onMore) {
                             Text("\(category.items.count - shown.count) more in the window")
-                                .font(.callout)
+                                .lbl()
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.leading, 34)
                                 .padding(.vertical, 8)
@@ -113,12 +114,12 @@ struct CategoryRow: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             if category.id == .restart {
                 Image(systemName: Creek.symbol(.restart))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
-                    .frame(width: 16, height: 16)
+                    .frame(width: 16, height: 20)
             } else {
                 Button {
                     if canTickAll {
@@ -134,38 +135,41 @@ struct CategoryRow: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, -4)
+                .padding(.vertical, -2)
                 .help(canTickAll ? "Tick the idle ones" : "Nothing idle here yet: click to see why")
                 .accessibilityLabel(canTickAll ? "Tick idle \(Creek.name(category.id))" : "Nothing idle in \(Creek.name(category.id)): show why")
                 .accessibilityAddTraits(state == .all ? .isSelected : [])
             }
 
             Button { withAnimation(.snappy(duration: 0.25)) { isOpen.toggle() } } label: {
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(Creek.name(category.id)).font(.body.weight(.semibold))
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 8)
-                    if category.cores >= 0.05 {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(Creek.cores(category.cores))
-                                .font(.body.weight(.medium))
-                                .contentTransition(.numericText())
-                            if idleCores >= 0.05 {
-                                Text("\(Creek.cores(idleCores)) idle")
-                                    .font(.caption)
-                                    .foregroundStyle(Creek.idle)
-                            }
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 8) {
+                        Text(Creek.name(category.id)).lbl().fixedSize()
+                        if category.id != .restart {
+                            Text(running).lbl().secondary()
+                            if idleCount > 0 { InkPill(text: "\(idleCount) idle") }
                         }
-                        .monospacedDigit()
+                        Spacer(minLength: 4)
+                        if category.cores >= 0.05 {
+                            Creek.coresText(category.cores, size: 20)
+                                .lineLimit(1)
+                                .contentTransition(.numericText())
+                        }
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(isOpen ? 180 : 0))
                     }
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isOpen ? 180 : 0))
+                    .frame(height: 20)
+                    if category.id == .restart {
+                        Text(subtitle).lbl().secondary()
+                    } else {
+                        DotMeter(
+                            dots: Creek.dots(category.id, in: model.snapshot, reclaimable: model.quickSelection.ticked, count: 24),
+                            size: 8
+                        )
+                        .help("\(Creek.cores(idleCores)) of \(Creek.cores(category.cores)) cores idle")
+                    }
                 }
                 .contentShape(Rectangle())
             }
@@ -211,22 +215,20 @@ struct ItemRow: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.name)
-                    .font(.callout)
+                    .font(.fragment(12))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if !item.judgement.fact.isEmpty, verdict != .manual || !VerdictBadge.factFits(item) {
                     Text(item.judgement.fact)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lbl(10, lines: 2)
+                        .secondary()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if verdict == .advice {
                 Button("Restart…") { Task { await model.showRestartDialog() } }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
+                    .buttonStyle(OutlineButtonStyle())
             } else {
                 VerdictBadge(item: item)
             }
@@ -260,8 +262,8 @@ struct ExplainButton: View {
     }
 }
 
-/// One status mark per item: "idle" in a pale green pill; "in use", "check" and a short fact in
-/// plain grey.
+/// One status mark per item: "idle" in an inverted pill; "in use", "check" and a short fact in plain
+/// grey.
 struct VerdictBadge: View {
     let item: Item
 
@@ -278,21 +280,11 @@ struct VerdictBadge: View {
         }
     }
 
-    private var hue: Color? {
-        switch item.judgement.verdict {
-        case .idle: Creek.idle
-        case .inUse, .manual, .check, .advice: nil
-        }
-    }
-
     var body: some View {
-        Text(Self.text(for: item))
-            .font(.caption.weight(.medium))
-            .lineLimit(1)
-            .foregroundStyle(hue ?? .secondary)
-            .padding(.horizontal, hue == nil ? 0 : 7)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(hue?.opacity(0.14) ?? .clear))
-            .fixedSize()
+        if item.judgement.verdict == .idle {
+            InkPill(text: Self.text(for: item), size: 10)
+        } else {
+            Text(Self.text(for: item)).lbl(10).secondary().fixedSize()
+        }
     }
 }

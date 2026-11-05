@@ -2,7 +2,7 @@ import AppKit
 import CleanyCore
 import SwiftUI
 
-/// The main window: the creek header, Quick select | Choose myself, every category, Clean up.
+/// The main window: the verdict header, Quick select | Choose myself, every category, Clean up.
 struct MainView: View {
     @Environment(AppModel.self) private var model
     let actions: ShellActions
@@ -12,14 +12,9 @@ struct MainView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 20) {
-                    CreekHeader(titleSize: 22, figureSize: 30)
-                    Picker("Selection", selection: $model.mode) {
-                        Text("Quick select").tag(AppModel.Mode.quick)
-                        Text("Choose myself").tag(AppModel.Mode.manual)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .help("Quick select ticks everything idle; Choose myself leaves the ticks to you")
+                    VerdictHeader(titleSize: 38)
+                    ModePicker(mode: $model.mode)
+                        .help("Quick select ticks everything idle; Choose myself leaves the ticks to you")
                     checklist
                 }
                 .padding(.horizontal, 20)
@@ -42,6 +37,7 @@ struct MainView: View {
                 .padding(.bottom, 20)
         }
         .animation(.snappy, value: model.outcome?.id)
+        .foregroundStyle(Creek.ink)
         .frame(width: 440)
         .frame(minHeight: 520, maxHeight: .infinity)
         .overlay(alignment: .topTrailing) {
@@ -69,8 +65,9 @@ struct MainView: View {
         if !model.hasScanned {
             ProgressView().controlSize(.small).padding(.top, 24)
         } else if model.snapshot.categories.isEmpty {
-            Text("Nothing running in the background.")
-                .foregroundStyle(.secondary)
+            Text("Nothing running in the background")
+                .lbl()
+                .secondary()
                 .padding(.top, 24)
         } else {
             VStack(spacing: 4) {
@@ -87,5 +84,32 @@ struct MainView: View {
             }
             .padding(.horizontal, -10)
         }
+    }
+}
+
+/// Quick select | Choose myself: the selected side is an ink plate.
+private struct ModePicker: View {
+    @Binding var mode: AppModel.Mode
+
+    var body: some View {
+        HStack(spacing: 2) {
+            segment("Quick select", .quick)
+            segment("Choose myself", .manual)
+        }
+        .padding(2)
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Creek.hairline))
+    }
+
+    private func segment(_ title: String, _ value: AppModel.Mode) -> some View {
+        Button { mode = value } label: {
+            Text(title)
+                .lbl()
+                .foregroundStyle(mode == value ? Creek.inverse : Creek.ink)
+                .frame(maxWidth: .infinity, minHeight: 24)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(mode == value ? Creek.ink : .clear))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(mode == value ? .isSelected : [])
     }
 }

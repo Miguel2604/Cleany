@@ -1,12 +1,11 @@
 import CleanyCore
 import SwiftUI
 
-/// The top of the popover and the window: the mood with the one finding, then the cores busy over
-/// the creek band and its legend. Cause first, text second.
-struct CreekHeader: View {
+/// The top of the popover and the window: the mood as a headline with the one finding and the
+/// battery under it, then the cores busy over their meter. Cause first, text second.
+struct VerdictHeader: View {
     @Environment(AppModel.self) private var model
-    var titleSize: CGFloat = 17
-    var figureSize: CGFloat = 26
+    var titleSize: CGFloat = 30
 
     private var watching: Bool {
         model.quickSelection.count == 0 && model.snapshot.watchingUntil(now: Date()) != nil
@@ -18,39 +17,38 @@ struct CreekHeader: View {
         let idle = model.quickSelection.count
         if idle > 0 {
             let cores = Creek.cores(model.quickSelection.freedCores(in: model.snapshot))
-            return idle == 1 ? "1 idle thing is using \(cores) cores." : "\(idle) idle things are using \(cores) cores."
+            return idle == 1 ? "1 idle thing is using \(cores) cores" : "\(idle) idle things are using \(cores) cores"
         }
         if watching, let until = model.snapshot.watchingUntil(now: Date()), let hint = WatchingHint.text(until: until, now: Date()) {
             return hint
         }
-        return model.snapshot.mood == .allGood ? "Nothing idle is running." : "Busy, and everything is in use."
+        return model.snapshot.mood == .allGood ? "Nothing idle is running" : "Busy, and everything is in use"
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.hasScanned ? Creek.title(model.snapshot.mood) : "Cleany")
-                    .font(.system(size: titleSize, weight: .semibold))
-                Text(sentence)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text((model.hasScanned ? Creek.title(model.snapshot.mood) : "Cleany").uppercased())
+                    .num(titleSize)
+                    .accessibilityAddTraits(.isHeader)
+                Text(sentence).lbl()
+                if model.hasScanned { Text(Creek.batteryLine(model.snapshot)).lbl().secondary() }
             }
+            .accessibilityElement(children: .combine)
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    CoresLabel(cores: model.snapshot.coresBusy, size: figureSize)
+                HStack(alignment: .center) {
+                    Text("Cores busy").lbl()
                     Spacer(minLength: 8)
-                    if model.hasScanned {
-                        Text(Creek.batteryLine(model.snapshot))
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
+                    Creek.coresText(model.snapshot.coresBusy, size: 20)
+                        .lineLimit(1)
+                        .contentTransition(.numericText())
                 }
+                .frame(height: 20)
+                .accessibilityElement(children: .combine)
                 let reclaimable = model.quickSelection.ticked
-                CreekBand(snapshot: model.snapshot, reclaimable: reclaimable)
-                if model.hasScanned { BandLegend(snapshot: model.snapshot, reclaimable: reclaimable) }
+                CoreMeter(snapshot: model.snapshot, reclaimable: reclaimable)
+                if model.hasScanned { MeterLegend(snapshot: model.snapshot, reclaimable: reclaimable).padding(.top, 2) }
             }
         }
     }
@@ -69,7 +67,7 @@ struct ToastView: View {
 
     var body: some View {
         Text(toast.text)
-            .font(.callout)
+            .lbl()
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .glassEffect(.regular, in: .capsule)
@@ -86,20 +84,16 @@ struct OutcomeCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                Image(systemName: outcome.allStopped ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(outcome.allStopped ? Creek.idle : .secondary)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(outcome.title).font(.body.weight(.semibold))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(outcome.title).lbl()
                     if let subtitle = outcome.subtitle {
-                        Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                        Text(subtitle).lbl().secondary()
                     }
                 }
                 Spacer(minLength: 6)
                 if outcome.canUndo {
                     Button("Undo") { Task { await model.undoLast() } }
-                        .buttonStyle(.glass)
-                        .controlSize(.small)
+                        .buttonStyle(OutlineButtonStyle())
                         .disabled(model.isCleaning || model.cleanIdleInFlight)
                 }
                 Button { model.dismissOutcome() } label: {
@@ -121,20 +115,16 @@ struct OutcomeCard: View {
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .frame(width: 18)
-                        Text(entry.name).font(.callout).lineLimit(1).truncationMode(.middle)
+                        Text(entry.name).font(.fragment(12)).lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: 6)
                         switch entry.result {
                         case .stopped:
-                            Text("Stopped")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(Creek.idle)
-                                .fixedSize()
+                            Text("Stopped").lbl().fixedSize()
                         case .notStopped(let reason):
                             Text(reason)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .lbl(10, lines: 2)
+                                .secondary()
                                 .multilineTextAlignment(.trailing)
-                                .lineLimit(2)
                                 .frame(maxWidth: 170, alignment: .trailing)
                         }
                     }
@@ -142,35 +132,69 @@ struct OutcomeCard: View {
                 }
                 if outcome.entries.count > maxRows {
                     Text("\(outcome.entries.count - maxRows) more")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .lbl()
+                        .secondary()
                         .padding(.leading, 28)
                 }
             }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Creek.raised))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Creek.raised))
     }
 }
 
-/// The one primary control, made primary by inversion: an ink pill with the window's color for its
-/// label. Pressing dims and settles it; disabled, it drops to a quiet fill.
+/// The one primary control, made primary by inversion: an ink plate with the window's color for its
+/// label. Pressing dims and settles it; disabled, it drops to a hairline.
 struct InkButtonStyle: ButtonStyle {
     /// Replaces the ink for the one destructive case (Stop anyway); its label turns white.
     var fill: Color?
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
+        let plate = RoundedRectangle(cornerRadius: 8, style: .continuous)
         configuration.label
-            .font(.body.weight(.semibold))
-            .foregroundStyle(isEnabled ? (fill == nil ? Color(nsColor: .textBackgroundColor) : .white) : .secondary)
-            .frame(maxWidth: .infinity, minHeight: 36)
-            .padding(.horizontal, 16)
-            .background(Capsule().fill(isEnabled ? (fill ?? .primary) : Creek.track))
+            .lbl(11.5)
+            .foregroundStyle(isEnabled ? (fill == nil ? Creek.inverse : .white) : .secondary)
+            .frame(maxWidth: .infinity, minHeight: 34)
+            .padding(.horizontal, 12)
+            .background(plate.fill(isEnabled ? (fill ?? Creek.ink) : .clear))
+            .overlay(plate.strokeBorder(isEnabled ? .clear : Creek.hairline))
             .opacity(configuration.isPressed ? 0.82 : 1)
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .animation(.snappy(duration: 0.15), value: configuration.isPressed)
-            .contentShape(Capsule())
+            .contentShape(plate)
+    }
+}
+
+/// A secondary control: an outlined label that inverts under the pointer.
+struct OutlineButtonStyle: ButtonStyle {
+    var minHeight: CGFloat = 22
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        OutlineLabel(configuration: configuration, minHeight: minHeight).opacity(isEnabled ? 1 : 0.4)
+    }
+
+    private struct OutlineLabel: View {
+        let configuration: Configuration
+        let minHeight: CGFloat
+        @State private var hovering = false
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            let inverted = hovering && isEnabled
+            let plate = RoundedRectangle(cornerRadius: 6, style: .continuous)
+            configuration.label
+                .lbl()
+                .foregroundStyle(inverted ? Creek.inverse : Creek.ink)
+                .padding(.horizontal, 8)
+                .frame(minHeight: minHeight)
+                .background(plate.fill(inverted ? Creek.ink : .clear))
+                .overlay(plate.strokeBorder(Creek.ink.opacity(0.45)))
+                .opacity(configuration.isPressed ? 0.82 : 1)
+                .contentShape(plate)
+                .onHover { hovering = $0 }
+        }
     }
 }
 
@@ -183,7 +207,7 @@ struct CleanUpButton: View {
         Button {
             Task { await model.cleanUp() }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 if model.isCleaning { ProgressView().controlSize(.small) }
                 if count == 0 {
                     Text(model.hasTickable ? "Nothing ticked" : "Nothing idle")
@@ -191,10 +215,9 @@ struct CleanUpButton: View {
                     // "idle" only when it is true of every ticked item: Choose myself can tick apps
                     // the engine never calls idle.
                     Text(model.selectionIsAllIdle ? "Clean up \(count) idle" : "Clean up \(count)")
-                    Text("frees \(Creek.cores(model.freedCores)) cores").fontWeight(.regular).opacity(0.7)
+                    Text("frees \(Creek.cores(model.freedCores)) cores").opacity(0.7)
                 }
             }
-            .monospacedDigit()
         }
         .buttonStyle(InkButtonStyle())
         .keyboardShortcut(.defaultAction)

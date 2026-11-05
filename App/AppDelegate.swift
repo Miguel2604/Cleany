@@ -36,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePopover)
-        statusItem.button?.imagePosition = .imageLeading
+        statusItem.button?.imagePosition = .imageOnly
         observeStatusItem()
 
         popover.behavior = .transient
@@ -106,13 +106,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if model.hasScanned, let battery = snapshot.battery, battery.onBattery, let left = battery.minutesLeft {
             minutes = Creek.minutes(left)
         }
-        let title = minutes.map { " \($0)" } ?? ""
+        let title = minutes?.uppercased() ?? ""
         let idleText = idleCount > 0 ? "\(idleCount) idle" : nil
         let label = ["Cleany", Creek.title(snapshot.mood), idleText, minutes.map { "\($0) left" }].compactMap { $0 }.joined(separator: ", ")
         if let shown = shownStatus, shown == (idleCount > 0, title, label) { return }
         shownStatus = (idleCount > 0, title, label)
-        button.image = MenuBarGlyph.image(idle: idleCount > 0)
-        button.title = title
+        button.image = MenuBarGlyph.image(idle: idleCount > 0, text: title)
         button.setAccessibilityLabel(label)
     }
 
@@ -140,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if let item { model.explaining = item }
     }
 
-    /// A glass window tinted with a true-neutral ground; the content draws edge to edge under the title bar.
+    /// A tinted-glass window, true neutral; the content draws edge to edge under the title bar.
     private func makeMainWindow() -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 440, height: 620),
@@ -159,7 +158,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         let glass = NSGlassEffectView()
         glass.cornerRadius = 0
-        glass.tintColor = NSColor(Creek.ground).withAlphaComponent(0.6)
+        glass.tintColor = NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 12 / 255, alpha: 0.46) : NSColor(white: 1, alpha: 0.72)
+        }
         glass.contentView = NSHostingView(rootView: MainView(actions: actions).environment(model))
         window.contentView = glass
         if !window.setFrameUsingName("CleanyMain") { window.center() }
@@ -207,19 +208,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func openSettingsFromMenu() { showSettings() }
 }
 
-/// The menu bar mark: a template image, so the menu bar tints it. The split-off stretch appears
-/// while something idle can be cleaned up.
+/// The menu bar mark, plus optional text: a template image, so the menu bar tints it. The stretch
+/// appears while something idle can be cleaned up; its dots are solid, hollow can't be seen at this size.
 @MainActor
 enum MenuBarGlyph {
-    private static var cache: [Bool: NSImage] = [:]
-
-    static func image(idle: Bool) -> NSImage {
-        if let cached = cache[idle] { return cached }
-        let renderer = ImageRenderer(content: CleanyMark(size: 16, segment: idle, ink: .black, accent: .black).padding(1))
-        renderer.scale = NSScreen.screens.first?.backingScaleFactor ?? 2
-        let image = renderer.nsImage ?? NSImage(size: NSSize(width: 18, height: 18))
+    static func image(idle: Bool, text: String) -> NSImage {
+        Fonts.register()
+        let dot: CGFloat = 2.4, gap: CGFloat = 1, height: CGFloat = 16
+        let glyphWidth = 5 * dot + 4 * gap
+        let label = NSAttributedString(string: text, attributes: [
+            .font: NSFont(name: "FragmentMono-Regular", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular),
+            .foregroundColor: NSColor.black,
+        ])
+        let textWidth = text.isEmpty ? 0 : ceil(label.size().width) + 6
+        let image = NSImage(size: NSSize(width: glyphWidth + textWidth, height: height), flipped: false) { _ in
+            NSColor.black.setFill()
+            let top = (height + 5 * dot + 4 * gap) / 2
+            for (column, row) in CleanyMark.letter + (idle ? CleanyMark.stretch : []) {
+                let rect = NSRect(x: CGFloat(column) * (dot + gap), y: top - dot - CGFloat(row) * (dot + gap), width: dot, height: dot)
+                NSBezierPath(ovalIn: rect).fill()
+            }
+            if !text.isEmpty {
+                label.draw(at: NSPoint(x: glyphWidth + 6, y: (height - label.size().height) / 2))
+            }
+            return true
+        }
         image.isTemplate = true
-        cache[idle] = image
         return image
     }
 }

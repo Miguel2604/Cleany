@@ -17,13 +17,13 @@ struct SettingsView: View {
             Section {
                 Toggle("Open at login", isOn: loginBinding)
                 if let loginError {
-                    Text(loginError).font(.caption).foregroundStyle(Creek.negative)
+                    Text(loginError).font(.fragment(11)).foregroundStyle(Creek.negative)
                 }
                 Toggle("Use Apple Intelligence for explanations", isOn: $model.useAI)
                 LabeledContent("Open the menu from anywhere", value: "⌃⌥⌘C")
             }
 
-            Section("Always kept") {
+            Section {
                 if model.keepList.entries.isEmpty {
                     Text("Nothing yet. Choose Keep on an item to add it.").foregroundStyle(.secondary)
                 } else {
@@ -37,9 +37,11 @@ struct SettingsView: View {
                         }
                     }
                 }
+            } header: {
+                header("Always kept")
             }
 
-            Section("Cleaned up") {
+            Section {
                 let week = model.history.totals(since: Date().addingTimeInterval(-7 * 86_400))
                 if model.history.entries.isEmpty {
                     Text("Nothing yet. Each cleanup shows up here.").foregroundStyle(.secondary)
@@ -52,25 +54,28 @@ struct SettingsView: View {
                                 Spacer()
                                 Text("\(entry.stopped) stopped · \(Creek.cores(entry.freedCores)) cores")
                                     .foregroundStyle(.secondary)
-                                    .monospacedDigit()
                             }
                             Text(entry.names.joined(separator: ", "))
-                                .font(.caption)
+                                .font(.fragment(11))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
                     }
                 }
+            } header: {
+                header("Cleaned up")
             }
 
             if let battery = model.snapshot.battery, let health = battery.healthPercent {
-                Section("Battery") {
+                Section {
                     LabeledContent("Health", value: battery.cycleCount.map { "\(health)% · \($0) cycles" } ?? "\(health)%")
                     if health >= 80 {
                         Text("Your battery is healthy. A fast drain comes from what is running.")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .lbl(10, lines: 2).secondary()
                     }
+                } header: {
+                    header("Battery")
                 }
             }
 
@@ -78,9 +83,9 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                     CleanyMark(size: 32)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Cleany").font(.headline)
+                        Text("CLEANY").num(20)
                         Text("Its detection engine comes from CleanUp by TheoInTech (MIT).")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .lbl(10, lines: 2).secondary()
                     }
                 }
                 Link("Cleany on GitHub", destination: Self.repoURL)
@@ -88,6 +93,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .font(.fragment(12))
+        .tint(.primary)
         .frame(width: 460)
         .frame(minHeight: 420)
         .onAppear(perform: syncLoginItem)
@@ -95,6 +102,8 @@ struct SettingsView: View {
             syncLoginItem()
         }
     }
+
+    private func header(_ title: String) -> some View { Text(title).lbl() }
 
     /// Turning it on or off asks the system; if it refuses, the switch snaps back and says why.
     private var loginBinding: Binding<Bool> {
