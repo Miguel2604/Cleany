@@ -163,7 +163,8 @@ struct MediumWidget: View {
                             DotMeter(dots: Creek.dots(category.id, in: snapshot, reclaimable: snapshot.reclaimable, count: 16), size: 6)
                             Creek.coresText(category.cores, size: 17).lineLimit(1).frame(width: 42, alignment: .trailing)
                         }
-                        .accessibilityElement(children: .combine)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(Creek.name(category.id)), \(Creek.cores(category.cores)) cores, \(Creek.cores(Creek.idleCores(category, reclaimable: snapshot.reclaimable))) idle")
                     }
                 }
             }
