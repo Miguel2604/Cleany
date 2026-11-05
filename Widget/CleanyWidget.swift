@@ -3,29 +3,46 @@ import CleanyCore
 import SwiftUI
 import WidgetKit
 
-struct CleanyProvider: TimelineProvider {
+enum BackgroundOption: String, AppEnum {
+    case `default`, tinted, clear
+
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Background"
+    static let caseDisplayRepresentations: [BackgroundOption: DisplayRepresentation] = [
+        .default: "Default", .tinted: "Tinted glass", .clear: "Fully clear",
+    ]
+
+    /// Default follows the choice in Cleany's Settings.
+    var style: Backdrop { Backdrop(rawValue: rawValue) ?? Backdrop.saved(in: Creek.groupDefaults) }
+}
+
+struct BackgroundIntent: WidgetConfigurationIntent {
+    static let title: LocalizedStringResource = "Cleany"
+    @Parameter(title: "Background", default: .default) var background: BackgroundOption
+}
+
+struct CleanyProvider: AppIntentTimelineProvider {
     /// How often the widget re-reads the snapshot on its own; the app also asks for a reload whenever
     /// the mood or the idle count changes.
     static let refreshInterval: TimeInterval = 5 * 60
 
     func placeholder(in context: Context) -> CleanyEntry {
-        CleanyEntry(date: .now, snapshot: .widgetCalmSample())
+        CleanyEntry(date: .now, snapshot: .widgetCalmSample(), background: .default)
     }
 
-    func getSnapshot(in context: Context, completion: @escaping @Sendable (CleanyEntry) -> Void) {
+    func snapshot(for intent: BackgroundIntent, in context: Context) async -> CleanyEntry {
         let now = Date.now
-        completion(CleanyEntry(date: now, snapshot: context.isPreview ? .widgetBusySample(date: now) : Self.load()))
+        return CleanyEntry(date: now, snapshot: context.isPreview ? .widgetBusySample(date: now) : Self.load(), background: intent.background)
     }
 
-    func getTimeline(in context: Context, completion: @escaping @Sendable (Timeline<CleanyEntry>) -> Void) {
+    func timeline(for intent: BackgroundIntent, in context: Context) async -> Timeline<CleanyEntry> {
         let now = Date.now
         let snapshot = Self.load()
-        var entries = [CleanyEntry(date: now, snapshot: snapshot)]
+        var entries = [CleanyEntry(date: now, snapshot: snapshot, background: intent.background)]
         // Flip to "Open Cleany" on time even if the app never wakes the widget again.
         if let snapshot, now.timeIntervalSince(snapshot.date) <= CleanyEntry.staleAfter {
-            entries.append(CleanyEntry(date: snapshot.date.addingTimeInterval(CleanyEntry.staleAfter + 1), snapshot: snapshot))
+            entries.append(CleanyEntry(date: snapshot.date.addingTimeInterval(CleanyEntry.staleAfter + 1), snapshot: snapshot, background: intent.background))
         }
-        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(Self.refreshInterval))))
+        return Timeline(entries: entries, policy: .after(now.addingTimeInterval(Self.refreshInterval)))
     }
 
     /// The app's latest snapshot from the App Group container; nil when there is none yet.
@@ -40,6 +57,7 @@ struct CleanyProvider: TimelineProvider {
 struct CleanyEntry: TimelineEntry {
     let date: Date
     let snapshot: Snapshot?
+    let background: BackgroundOption
 
     /// Snapshots older than this mean the app isn't running; its numbers would be misleading.
     static let staleAfter: TimeInterval = 15 * 60
@@ -53,7 +71,7 @@ struct CleanyEntry: TimelineEntry {
 @main
 struct CleanyWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "app.cleany.Cleany.Widget", provider: CleanyProvider()) { entry in
+        AppIntentConfiguration(kind: "app.cleany.Cleany.Widget", intent: BackgroundIntent.self, provider: CleanyProvider()) { entry in
             CleanyWidgetView(entry: entry)
         }
         .configurationDisplayName("Cleany")
@@ -69,7 +87,7 @@ struct CleanyWidgetView: View {
 
     var body: some View {
         // Tapping anywhere but the button opens the app.
-        Group {
+        let content = Group {
             if let snapshot = entry.fresh {
                 switch family {
                 case .systemMedium: MediumWidget(snapshot: snapshot)
@@ -79,119 +97,17 @@ struct CleanyWidgetView: View {
                 StaleWidget()
             }
         }
-        .containerBackground(for: .widget) { TintedGlass() }
+        switch entry.background.style {
+        case .tinted: content.containerBackground(for: .widget) { TintedGlass(shape: ContainerRelativeShape()) }
+        case .clear: content.clearShadow().containerBackground(for: .widget) { Color.clear }
+        }
     }
 }
 
 // MARK: - Families
 
-/// 170×170: how long the battery lasts, or the cores busy, over the machine's meter.
-struct SmallWidget: View {
-    let snapshot: Snapshot
-
-    private var minutesLeft: Int? {
-        guard let battery = snapshot.battery, battery.onBattery else { return nil }
-        return battery.minutesLeft
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(minutesLeft == nil ? "Cores busy" : "Left on battery").lbl().secondary()
-            Spacer(minLength: 0)
-            Group {
-                if let minutesLeft {
-                    Text(Creek.minutes(minutesLeft).uppercased()).font(.doto(50))
-                } else {
-                    Creek.coresText(snapshot.coresBusy, size: 50)
-                }
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-            .frame(height: 50, alignment: .leading)
-            CoreMeter(snapshot: snapshot, reclaimable: snapshot.reclaimable, count: 14, size: 7).padding(.top, 12)
-            Group {
-                if snapshot.idleCount > 0 {
-                    CleanButton(count: snapshot.idleCount)
-                } else {
-                    Text(Creek.title(snapshot.mood)).lbl().secondary()
-                }
-            }
-            .frame(height: 20)
-            .padding(.top, 10)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    }
-}
-
-/// 364×170: the mood as a headline, then the three categories using the most CPU.
-struct MediumWidget: View {
-    let snapshot: Snapshot
-
-    /// The three categories using the most CPU; Restart is advice, not work.
-    private var top: [CategorySummary] {
-        Array(snapshot.categories
-            .filter { $0.id != .restart && $0.cores > 0 }
-            .sorted { ($0.cores, $1.id.rawValue) > ($1.cores, $0.id.rawValue) }
-            .prefix(3))
-    }
-
-    private var line: String {
-        let cores = "\(Creek.cores(snapshot.coresBusy)) cores"
-        guard let battery = snapshot.battery, battery.onBattery, let minutes = battery.minutesLeft else { return cores }
-        return "\(Creek.minutes(minutes)) left · \(cores)"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(Creek.title(snapshot.mood).uppercased()).num(34).accessibilityAddTraits(.isHeader)
-            HStack {
-                Text(line).lbl()
-                Spacer(minLength: 8)
-                if snapshot.idleCount > 0 { CleanButton(count: snapshot.idleCount) }
-            }
-            .frame(height: 20)
-            .padding(.top, 4)
-            Spacer(minLength: 0)
-            if top.isEmpty {
-                Text("Nothing is using the CPU").lbl().secondary()
-            } else {
-                VStack(spacing: 4) {
-                    ForEach(top, id: \.id) { category in
-                        HStack(spacing: 12) {
-                            Text(Creek.name(category.id)).lbl().frame(width: 92, alignment: .leading)
-                            DotMeter(dots: Creek.dots(category.id, in: snapshot, reclaimable: snapshot.reclaimable, count: 16), size: 6)
-                            Creek.coresText(category.cores, size: 17).lineLimit(1).frame(width: 42, alignment: .trailing)
-                        }
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(Creek.name(category.id)), \(Creek.cores(category.cores)) cores, \(Creek.cores(Creek.idleCores(category, reclaimable: snapshot.reclaimable))) idle")
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    }
-}
-
-/// The app isn't running (or hasn't written a snapshot): no stale numbers, just a way in.
-struct StaleWidget: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            CleanyMark(size: 28, segment: false)
-            Spacer(minLength: 0)
-            Text("OPEN CLEANY").num(26)
-            Text("Numbers are out of date").lbl(10, lines: 2).secondary().padding(.top, 6)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    }
-}
-
-// MARK: - Pieces
-
-private struct CleanButton: View {
+/// Runs the intent: the widget is sandboxed and can't stop anything itself.
+struct IdleAction: View {
     let count: Int
 
     var body: some View {
@@ -199,26 +115,6 @@ private struct CleanButton: View {
             InkPill(text: "Clean up \(count)")
         }
         .buttonStyle(.plain)
-    }
-}
-
-/// The tinted-glass fill: a dark or light translucent layer over a blur, solid under Reduce Transparency.
-private struct TintedGlass: View {
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceTransparency) private var solid
-
-    var body: some View {
-        Group {
-            if solid {
-                scheme == .dark ? Color(white: 0.11) : Color(white: 0.95)
-            } else {
-                ZStack {
-                    Rectangle().fill(.ultraThinMaterial)
-                    scheme == .dark ? Color(white: 12 / 255).opacity(0.46) : Color.white.opacity(0.5)
-                }
-            }
-        }
-        .overlay(ContainerRelativeShape().strokeBorder(.white.opacity(scheme == .dark ? 0.1 : 0.6), lineWidth: 1))
     }
 }
 

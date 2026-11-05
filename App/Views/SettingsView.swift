@@ -1,12 +1,17 @@
 import AppKit
 import CleanyCore
 import SwiftUI
+import WidgetKit
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     /// Mirrors the system's real login item status, re-read whenever the pane appears.
     @State private var openAtLogin = LoginItem.isEnabled
     @State private var loginError: String?
+    @AppStorage(Backdrop.key, store: Creek.groupDefaults) private var background = Backdrop.tinted
+    @AppStorage(DesktopKeys.show) private var desktopPanel = false
+    @AppStorage(DesktopKeys.layout) private var layout = DesktopLayout.small
+    @AppStorage(DesktopKeys.locked) private var locked = false
 
     static let upstreamURL = URL(string: "https://github.com/TheoInTech/CleanUp")!
     static let repoURL = URL(string: "https://github.com/Miguel2604/Cleany")!
@@ -21,6 +26,25 @@ struct SettingsView: View {
                 }
                 Toggle("Use Apple Intelligence for explanations", isOn: $model.useAI)
                 LabeledContent("Open the menu from anywhere", value: "⌃⌥⌘C")
+            }
+
+            Section {
+                Picker("Background", selection: $background) {
+                    Text("Tinted glass").tag(Backdrop.tinted)
+                    Text("Fully clear").tag(Backdrop.clear)
+                }
+                .onChange(of: background) { WidgetCenter.shared.reloadAllTimelines() }
+                Toggle("Show a panel on the desktop", isOn: $desktopPanel)
+                Picker("Layout", selection: $layout) {
+                    ForEach(DesktopLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .disabled(!desktopPanel)
+                Toggle("Lock position", isOn: $locked).disabled(!desktopPanel)
+            } header: {
+                header("Widget and desktop panel")
+            } footer: {
+                Text("Each widget can override the background in its Edit Widget menu. macOS can dim desktop widgets while you work; the panel is never dimmed. Unlock it to drag it into place. Locked, clicks go through to the desktop.")
+                    .font(.fragment(11))
             }
 
             Section {

@@ -21,6 +21,12 @@ enum Creek {
     /// Hairlines between groups of rows and around segments.
     static let hairline = ink.opacity(0.14)
 
+    /// The App Group's defaults, shared by the app and the widget. Nil without a real team.
+    static var groupDefaults: UserDefaults? {
+        guard let id = Bundle.main.object(forInfoDictionaryKey: "CleanyAppGroup") as? String, !id.hasPrefix(".") else { return nil }
+        return UserDefaults(suiteName: id)
+    }
+
     static func name(_ id: CategoryID) -> String {
         switch id {
         case .simulators: "Simulators"

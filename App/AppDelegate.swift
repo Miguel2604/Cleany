@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var mainWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var hotKey: HotKey?
+    private var desktopPanel: DesktopPanel?
 
     private lazy var actions = ShellActions(
         openWindow: { [weak self] item in self?.showMainWindow(explaining: item) },
@@ -32,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApp.mainMenu = makeMainMenu()
         model.openMainWindow = { [weak self] in self?.showMainWindow(explaining: nil) }
         model.start()
+        desktopPanel = DesktopPanel(model: model)
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.target = self

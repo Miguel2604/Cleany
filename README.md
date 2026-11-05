@@ -22,6 +22,9 @@ runaway browser tabs are what usually eat the battery.
 - **Warns, never acts alone.** A notification when the battery drains fast and idle items are to
   blame, with a "Clean up N idle" button.
 - **Menu bar, ⌃⌥⌘C from anywhere, and a widget** do the whole job without opening the window.
+- **Tinted or fully clear.** Settings sets the background for the widget and the desktop panel; each
+  widget can override it in Edit Widget. The **desktop panel** is the widget in a transparent window
+  just above the wallpaper, which macOS never dims.
 - **History** in Settings: what each cleanup stopped and the CPU it gave back.
 
 Nothing shows as idle for the first 10 to 30 minutes after launch or wake: Cleany watches first.
