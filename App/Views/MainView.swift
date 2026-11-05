@@ -5,6 +5,7 @@ import SwiftUI
 /// The main window: the verdict header, Quick select | Choose myself, every category, Clean up.
 struct MainView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var scheme
     let actions: ShellActions
 
     var body: some View {
@@ -38,6 +39,8 @@ struct MainView: View {
         }
         .animation(.snappy, value: model.outcome?.id)
         .foregroundStyle(Creek.ink)
+        // Light glass over a dark wallpaper settles on mid grey, too dark for ink at secondary opacity.
+        .background(scheme == .light ? Color.white.opacity(0.6) : .clear, ignoresSafeAreaEdges: .all)
         .frame(width: 440)
         .frame(minHeight: 520, maxHeight: .infinity)
         .overlay(alignment: .topTrailing) {
